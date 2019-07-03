@@ -3,15 +3,12 @@
 #include <Eigen/Core>
 #include <Eigen/Eigenvalues>
 
-#include "HeterogeneousCore/CUDAUtilities/interface/cudaCheck.h"
-#include "HeterogeneousCore/CUDAUtilities/interface/exitSansCUDADevices.h"
+#include <cuda_to_cupla.hpp>
 #include "test_common.h"
 
 using namespace Eigen;
 
-using Matrix5d = Matrix<double, 5, 5>;
-
-__host__ __device__ void eigenValues(Matrix3d *m, Eigen::SelfAdjointEigenSolver<Matrix3d>::RealVectorType *ret) {
+ALPAKA_FN_ACC void eigenValues(Matrix3d *m, Eigen::SelfAdjointEigenSolver<Matrix3d>::RealVectorType *ret) {
 #if TEST_DEBUG
   printf("Matrix(0,0): %f\n", (*m)(0, 0));
   printf("Matrix(1,1): %f\n", (*m)(1, 1));
@@ -22,6 +19,14 @@ __host__ __device__ void eigenValues(Matrix3d *m, Eigen::SelfAdjointEigenSolver<
   (*ret) = es.eigenvalues();
   return;
 }
+
+struct kernel {
+  template< typename T_Acc >
+  ALPAKA_FN_ACC
+  void operator()( T_Acc const & acc, Matrix3d *m, Eigen::SelfAdjointEigenSolver<Matrix3d>::RealVectorType *ret) const {
+    eigenValues(m, ret);
+  }
+};
 
 void testEigenvalues() {
   std::cout << "TEST EIGENVALUES" << std::endl;
@@ -46,7 +51,7 @@ void testEigenvalues() {
   cudaMalloc((void **)&ret_gpu, sizeof(Eigen::SelfAdjointEigenSolver<Matrix3d>::RealVectorType));
   cudaMemcpy(m_gpu, &m, sizeof(Matrix3d), cudaMemcpyHostToDevice);
 
-  kernel<<<1, 1>>>(m_gpu, ret_gpu);
+  CUPLA_KERNEL(kernel)(1,1,0,0)(m_gpu, ret_gpu);
   cudaDeviceSynchronize();
 
   cudaMemcpy(mgpudebug, m_gpu, sizeof(Matrix3d), cudaMemcpyDeviceToHost);
@@ -60,8 +65,7 @@ void testEigenvalues() {
 }
 
 int main(int argc, char *argv[]) {
-  exitSansCUDADevices();
-
+  
   testEigenvalues();
 
   return 0;

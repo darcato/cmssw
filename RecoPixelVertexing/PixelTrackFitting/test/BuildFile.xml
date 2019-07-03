@@ -1,4 +1,4 @@
-<library file="PixelTrackTest.cc" name="PixelTrackTest">
+<!-- <library file="PixelTrackTest.cc" name="PixelTrackTest">
   <use name="boost"/>
   <use name="root"/>
   <use name="FWCore/Framework"/>
@@ -47,17 +47,27 @@
   <use name="cuda-api-wrappers"/>
   <use name="HeterogeneousCore/CUDAUtilities"/>
   <flags CXXFLAGS="-g -DUSE_BL"/>
-</bin>
+</bin> -->
 
-<bin file="testEigenGPUNoFit.cu" name="testEigenGPUNoFit_t">
+<!-- <bin file="testEigenGPUNoFit.cu" name="testEigenGPUNoFit_t">
   <use name="eigen"/>
   <use name="cuda"/>
   <use name="cuda-api-wrappers"/>
   <use name="HeterogeneousCore/CUDAUtilities"/>
-  <flags CXXFLAGS="-g"/>
+  <use name="boost"/>
+  <flags CUDA_FLAGS="-g -I/data/user/dmarcato/cupla/include/ -I/data/user/dmarcato/alpaka/include -include cupla/standalone/GpuCudaRt.hpp -x cu"/>
+</bin> -->
+
+<bin file="cuplatest.cu" name="testCupla_t">
+  <use name="cuda"/>
+  <use name="cuda-api-wrappers"/>
+  <use name="HeterogeneousCore/CUDAUtilities"/>
+  <use name="boost"/>
+  <flags CUDA_FLAGS="-g -I/data/user/dmarcato/cupla/include/ -I/data/user/dmarcato/alpaka/include -include cupla/standalone/GpuCudaRt.hpp -x cu -I/data/cmssw/slc7_amd64_gcc700/external/boost/1.67.0-pafccj/include"/>
+
 </bin>
 
-<bin file="PixelTrackRiemannFit.cc">
+<!-- <bin file="PixelTrackRiemannFit.cc">
   <use name="eigen"/>
   <use name="cuda"/>
   <use name="root"/>
@@ -83,3 +93,4 @@
   <use name="cuda"/>
   <flags CXXFLAGS="-g"/>
 </bin>
+ -->
