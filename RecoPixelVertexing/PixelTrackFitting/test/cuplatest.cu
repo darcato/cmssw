@@ -1,5 +1,6 @@
-#include <cuda_to_cupla.hpp>
-//#include <Eigen/Core>
+#include <Eigen/Core>
+#include <cupla/standalone/GpuCudaRt.hpp>
+//#include <cuda_to_cupla.hpp>
 
 int main(int argc, char *argv[]) {
   

@@ -5,7 +5,7 @@
 #include <cassert>
 #include <random>
 
-template<class C>
+/* template<class C>
 __host__ __device__
 void printIt(C * m) {
 #ifdef TEST_DEBUG
@@ -17,7 +17,7 @@ void printIt(C * m) {
   }
 #endif
 }
-
+ */
 template<class C1, class C2>
 bool isEqualFuzzy(C1 a, C2 b, double epsilon = 1e-6) {
   for (unsigned int i = 0; i < a.rows(); ++i) {
