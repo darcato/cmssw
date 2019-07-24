@@ -12,39 +12,45 @@
 
 namespace gpuClustering {
 
-  __global__ void countModules(uint16_t const* __restrict__ id,
-                               uint32_t* __restrict__ moduleStart,
-                               int32_t* __restrict__ clusterId,
-                               int numElements) {
-    int first = blockDim.x * blockIdx.x + threadIdx.x;
-    for (int i = first; i < numElements; i += gridDim.x * blockDim.x) {
-      clusterId[i] = i;
-      if (InvId == id[i])
-        continue;
-      auto j = i - 1;
-      while (j >= 0 and id[j] == InvId)
-        --j;
-      if (j < 0 or id[j] != id[i]) {
-        // boundary...
-        auto loc = atomicInc(moduleStart, MaxNumModules);
-        moduleStart[loc + 1] = i;
+  struct countModules {
+    template< typename T_Acc >
+    ALPAKA_FN_ACC
+    void operator()(T_Acc const& acc,
+                    uint16_t const* __restrict__ id,
+                    uint32_t* __restrict__ moduleStart,
+                    int32_t* __restrict__ clusterId,
+                    int numElements) const {
+      int first = blockDim.x * blockIdx.x + threadIdx.x;
+      for (int i = first; i < numElements; i += gridDim.x * blockDim.x) {
+        clusterId[i] = i;
+        if (InvId == id[i])
+          continue;
+        auto j = i - 1;
+        while (j >= 0 and id[j] == InvId)
+          --j;
+        if (j < 0 or id[j] != id[i]) {
+          // boundary...
+          auto loc = atomicInc(moduleStart, MaxNumModules);
+          moduleStart[loc + 1] = i;
+        }
       }
     }
-  }
+  };
 
-  __global__
-      //  __launch_bounds__(256,4)
-      void
-      findClus(uint16_t const* __restrict__ id,           // module id of each pixel
-               uint16_t const* __restrict__ x,            // local coordinates of each pixel
-               uint16_t const* __restrict__ y,            //
-               uint32_t const* __restrict__ moduleStart,  // index of the first pixel of each module
-               uint32_t* __restrict__ nClustersInModule,  // output: number of clusters found in each module
-               uint32_t* __restrict__ moduleId,           // output: module id of each module
-               int32_t* __restrict__ clusterId,           // output: cluster id of each pixel
-               int numElements) {
-    if (blockIdx.x >= moduleStart[0])
-      return;
+  struct findClus {
+    template< typename T_Acc >
+    ALPAKA_FN_ACC
+    void operator()(T_Acc const& acc,
+                    uint16_t const* __restrict__ id,           // module id of each pixel
+                    uint16_t const* __restrict__ x,            // local coordinates of each pixel
+                    uint16_t const* __restrict__ y,            //
+                    uint32_t const* __restrict__ moduleStart,  // index of the first pixel of each module
+                    uint32_t* __restrict__ nClustersInModule,  // output: number of clusters found in each module
+                    uint32_t* __restrict__ moduleId,           // output: module id of each module
+                    int32_t* __restrict__ clusterId,           // output: cluster id of each pixel
+                    int numElements) const {
+      if (blockIdx.x >= moduleStart[0])
+        return;
 
     auto firstPixel = moduleStart[1 + blockIdx.x];
     auto thisModuleId = id[firstPixel];
@@ -278,6 +284,7 @@ namespace gpuClustering {
 #endif
     }
   }
+  };
 
 }  // namespace gpuClustering
 

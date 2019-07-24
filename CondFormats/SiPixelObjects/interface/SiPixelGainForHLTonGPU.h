@@ -6,6 +6,7 @@
 #include <tuple>
 
 #include "HeterogeneousCore/CUDAUtilities/interface/cuda_assert.h"
+#include "RecoPixelVertexing/PixelTrackFitting/test/cms_cupla.h"
 
 struct SiPixelGainForHLTonGPU_DecodingStructure{
   uint8_t gain;
@@ -23,7 +24,7 @@ class SiPixelGainForHLTonGPU {
   using Range = std::pair<uint32_t,uint32_t>;
  
 
-  inline __host__ __device__
+  inline ALPAKA_FN_ACC
   std::pair<float,float> getPedAndGain(uint32_t moduleInd, int col, int row, bool& isDeadColumn, bool& isNoisyColumn ) const {
 
 

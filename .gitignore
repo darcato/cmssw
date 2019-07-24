@@ -4,3 +4,4 @@ __init__.py
 .#*
 #*#
 *~
+.vscode/c_cpp_properties.json

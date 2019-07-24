@@ -1,6 +1,7 @@
 <use name="cuda-api-wrappers"/>
 <use name="FWCore/ServiceRegistry"/>
 <use name="HeterogeneousCore/CUDAServices"/>
+<flags CXXFLAGS="-g -I/data/user/dmarcato/cupla/include/ -I/data/user/dmarcato/alpaka/include"/>
 
 <export>
     <lib name="1"/>

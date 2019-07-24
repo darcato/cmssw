@@ -2,7 +2,7 @@
 #include <iostream>
 #include <limits>
 
-#include <cuda.h>
+//#include <cuda.h>
 #include <cuda/api_wrappers.h>
 
 #include "FWCore/MessageLogger/interface/MessageLogger.h"
@@ -26,6 +26,8 @@ void setCudaLimit(cudaLimit limit, const char* name, size_t request) {
     edm::LogWarning("CUDAService") << "CUDA device " << device << ": unsupported limit \"" << name << "\"";
     return;
   }
+  
+#ifdef __CUDACC__  
   // read back the limit value
   size_t value;
   cudaCheck(cudaDeviceGetLimit(&value, limit));
@@ -34,6 +36,7 @@ void setCudaLimit(cudaLimit limit, const char* name, size_t request) {
   } else if (value != request) {
     edm::LogWarning("CUDAService") << "CUDA device " << device << ": limit \"" << name << "\" set to " << value << " instead of requested " << request;
   }
+#endif
 }
 
 constexpr
@@ -137,6 +140,7 @@ CUDAService::CUDAService(edm::ParameterSet const& config, edm::ActivityRegistry&
   auto devRuntimeSyncDepth          = limits.getUntrackedParameter<int>("cudaLimitDevRuntimeSyncDepth");
   auto devRuntimePendingLaunchCount = limits.getUntrackedParameter<int>("cudaLimitDevRuntimePendingLaunchCount");
 
+#ifdef __CUDACC__  
   for (int i = 0; i < numberOfDevices_; ++i) {
     // read information about the compute device.
     // see the documentation of cudaGetDeviceProperties() for more information.
@@ -259,7 +263,6 @@ CUDAService::CUDAService(edm::ParameterSet const& config, edm::ActivityRegistry&
         setCudaLimit(cudaLimitDevRuntimePendingLaunchCount, "cudaLimitDevRuntimePendingLaunchCount", devRuntimePendingLaunchCount);
       }
     }
-
     size_t value;
     log << "CUDA limits\n";
     cudaCheck(cudaDeviceGetLimit(&value, cudaLimitPrintfFifoSize));
@@ -276,6 +279,7 @@ CUDAService::CUDAService(edm::ParameterSet const& config, edm::ActivityRegistry&
     }
     log << '\n';
   }
+#endif
 
   // create allocator
   auto const& allocator = config.getUntrackedParameter<edm::ParameterSet>("allocator");
@@ -447,22 +451,22 @@ void *CUDAService::allocate_device(int dev, size_t nbytes, cuda::stream_t<>& str
       throw std::runtime_error("Tried to allocate "+std::to_string(nbytes)+" bytes, but the allocator maximum is "+std::to_string(allocator_->maxAllocation));
     }
 
-    cuda::throw_if_error(allocator_->deviceAllocator.DeviceAllocate(dev, &ptr, nbytes, stream.id()));
+    throw_if_error(allocator_->deviceAllocator.DeviceAllocate(dev, &ptr, nbytes, stream.id()));
   }
   else {
     cuda::device::current::scoped_override_t<> setDeviceForThisScope(dev);
-    cuda::throw_if_error(cudaMalloc(&ptr, nbytes));
+    throw_if_error(cudaMalloc(&ptr, nbytes));
   }
   return ptr;
 }
 
 void CUDAService::free_device(int device, void *ptr) {
   if(allocator_) {
-    cuda::throw_if_error(allocator_->deviceAllocator.DeviceFree(device, ptr));
+    throw_if_error(allocator_->deviceAllocator.DeviceFree(device, ptr));
   }
   else {
     cuda::device::current::scoped_override_t<> setDeviceForThisScope(device);
-    cuda::throw_if_error(cudaFree(ptr));
+    throw_if_error(cudaFree(ptr));
   }
 }
 
@@ -474,10 +478,10 @@ void *CUDAService::allocate_host(size_t nbytes, cuda::stream_t<>& stream) {
       throw std::runtime_error("Tried to allocate "+std::to_string(nbytes)+" bytes, but the allocator maximum is "+std::to_string(allocator_->maxAllocation));
     }
 
-    cuda::throw_if_error(allocator_->hostAllocator.HostAllocate(&ptr, nbytes, stream.id()));
+    throw_if_error(allocator_->hostAllocator.HostAllocate(&ptr, nbytes, stream.id()));
   }
   else {
-    cuda::throw_if_error(cudaMallocHost(&ptr, nbytes));
+    throw_if_error(cudaMallocHost(&ptr, nbytes));
   }
 
   return ptr;
@@ -485,10 +489,10 @@ void *CUDAService::allocate_host(size_t nbytes, cuda::stream_t<>& stream) {
 
 void CUDAService::free_host(void *ptr) {
   if(allocator_) {
-    cuda::throw_if_error(allocator_->hostAllocator.HostFree(ptr));
+    throw_if_error(allocator_->hostAllocator.HostFree(ptr));
   }
   else {
-    cuda::throw_if_error(cudaFreeHost(ptr));
+    throw_if_error(cudaFreeHost(ptr));
   }
 }
 

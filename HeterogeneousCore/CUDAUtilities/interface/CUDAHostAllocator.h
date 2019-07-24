@@ -34,7 +34,7 @@ public:
   T* allocate(std::size_t n) const __attribute__((warn_unused_result)) __attribute__((malloc)) __attribute__((returns_nonnull))
   {
     void* ptr = nullptr;
-    cudaError_t status = cudaMallocHost(&ptr, n * sizeof(T), FLAGS);
+    cudaError_t status = cudaHostAlloc(&ptr, n * sizeof(T), FLAGS);
     if (status != cudaSuccess) {
       throw cuda_bad_alloc(status);
     }

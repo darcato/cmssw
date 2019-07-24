@@ -5,7 +5,7 @@
  * Everything you need to run cuda code in plain sequential c++ code
  */
 
-#ifndef __CUDACC__
+#if !defined __CUDACC__  &&  !defined CUPLA_KERNEL
 
 #include <algorithm>
 #include <cstdint>

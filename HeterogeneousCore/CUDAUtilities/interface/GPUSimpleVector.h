@@ -7,6 +7,8 @@
 #include <utility>
 
 #include "HeterogeneousCore/CUDAUtilities/interface/cudaCompat.h"
+#include "RecoPixelVertexing/PixelTrackFitting/test/cms_cupla.h"
+
 
 namespace GPU {
   template <class T>
@@ -45,9 +47,9 @@ namespace GPU {
       }
     }
 
-    __device__ inline T &back() { return m_data[m_size - 1]; }
+    ALPAKA_FN_ACC inline T &back() { return m_data[m_size - 1]; }
 
-    __device__ inline const T &back() const {
+    ALPAKA_FN_ACC inline const T &back() const {
       if (m_size > 0) {
         return m_data[m_size - 1];
       } else
@@ -55,7 +57,8 @@ namespace GPU {
     }
 
     // thread-safe version of the vector, when used in a CUDA kernel
-    __device__ int push_back(const T &element) {
+    template<typename T_Acc> 
+    ALPAKA_FN_ACC int push_back(T_Acc const & acc, const T &element) {
       auto previousSize = atomicAdd(&m_size, 1);
       if (previousSize < m_capacity) {
         m_data[previousSize] = element;
@@ -66,8 +69,8 @@ namespace GPU {
       }
     }
 
-    template <class... Ts>
-    __device__ int emplace_back(Ts &&... args) {
+    template <typename T_Acc, class... Ts>
+    ALPAKA_FN_ACC int emplace_back(T_Acc const & acc, Ts &&... args) {
       auto previousSize = atomicAdd(&m_size, 1);
       if (previousSize < m_capacity) {
         (new (&m_data[previousSize]) T(std::forward<Ts>(args)...));
@@ -79,7 +82,8 @@ namespace GPU {
     }
 
     // thread safe version of resize
-    __device__ int extend(int size = 1) {
+    template<typename T_Acc> 
+    ALPAKA_FN_ACC int extend(T_Acc const & acc, int size = 1) {
       auto previousSize = atomicAdd(&m_size, size);
       if (previousSize < m_capacity) {
         return previousSize;
@@ -89,7 +93,8 @@ namespace GPU {
       }
     }
 
-    __device__ int shrink(int size = 1) {
+    template<typename T_Acc> 
+    ALPAKA_FN_ACC  int shrink(T_Acc const & acc, int size = 1) {
       auto previousSize = atomicSub(&m_size, size);
       if (previousSize >= size) {
         return previousSize - size;

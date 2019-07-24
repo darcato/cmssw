@@ -22,37 +22,47 @@
 namespace cudautils {
 
   template <typename Histo, typename T>
-  __global__ void countFromVector(Histo *__restrict__ h,
+  struct countFromVector
+  {
+    template< typename T_Acc >
+   ALPAKA_FN_ACC
+    void operator()( T_Acc const & acc, Histo *__restrict__ h,
                                   uint32_t nh,
                                   T const *__restrict__ v,
-                                  uint32_t const *__restrict__ offsets) {
-    int first = blockDim.x * blockIdx.x + threadIdx.x;
-    for (int i = first; i < offsets[nh]; i += gridDim.x * blockDim.x) {
-      auto off = cuda_std::upper_bound(offsets, offsets + nh + 1, i);
-      assert((*off) > 0);
-      int32_t ih = off - offsets - 1;
-      assert(ih >= 0);
-      assert(ih < nh);
-      (*h).count(v[i], ih);
+                                  uint32_t const *__restrict__ offsets) const {
+      int first = blockDim.x * blockIdx.x + threadIdx.x;
+      for (uint32_t i = first; i < offsets[nh]; i += gridDim.x * blockDim.x) {
+        auto off = cuda_std::upper_bound(offsets, offsets + nh + 1, i);
+        assert((*off) > 0);
+        int32_t ih = off - offsets - 1;
+        assert(ih >= 0);
+        assert(ih < nh);
+        (*h).count(v[i], ih);
+      }
     }
-  }
+  };
 
   template <typename Histo, typename T>
-  __global__ void fillFromVector(Histo *__restrict__ h,
+  struct fillFromVector
+  {
+    template< typename T_Acc >
+   ALPAKA_FN_ACC
+    void operator()( T_Acc const & acc, Histo *__restrict__ h,
                                  uint32_t nh,
                                  T const *__restrict__ v,
-                                 uint32_t const *__restrict__ offsets) {
-    int first = blockDim.x * blockIdx.x + threadIdx.x;
-    for (int i = first; i < offsets[nh]; i += gridDim.x * blockDim.x) {
-      auto off = cuda_std::upper_bound(offsets, offsets + nh + 1, i);
-      assert((*off) > 0);
-      int32_t ih = off - offsets - 1;
-      assert(ih >= 0);
-      assert(ih < nh);
-      (*h).fill(v[i], i, ih);
+                                 uint32_t const *__restrict__ offsets) const {
+      int first = blockDim.x * blockIdx.x + threadIdx.x;
+      for (uint32_t i = first; i < offsets[nh]; i += gridDim.x * blockDim.x) {
+        auto off = cuda_std::upper_bound(offsets, offsets + nh + 1, i);
+        assert((*off) > 0);
+        int32_t ih = off - offsets - 1;
+        assert(ih >= 0);
+        assert(ih < nh);
+        (*h).fill(v[i], i, ih);
+      }
     }
-  }
-
+  };
+  
   template <typename Histo>
   void launchZero(Histo *__restrict__ h,
                   cudaStream_t stream
@@ -120,15 +130,20 @@ namespace cudautils {
   }
 
   template <typename Assoc>
-  __global__ void finalizeBulk(AtomicPairCounter const *apc, Assoc *__restrict__ assoc) {
-    assoc->bulkFinalizeFill(*apc);
-  }
+  struct finalizeBulk
+  {
+    template< typename T_Acc >
+   ALPAKA_FN_ACC
+    void operator()( T_Acc const & acc, AtomicPairCounter const *apc, Assoc *__restrict__ assoc ) const {
+      assoc->bulkFinalizeFill(acc, *apc);
+    }
+  };
 
 }  // namespace cudautils
 
 // iteratate over N bins left and right of the one containing "v"
 template <typename Hist, typename V, typename Func>
-__host__ __device__ __forceinline__ void forEachInBins(Hist const &hist, V value, int n, Func func) {
+ALPAKA_FN_ACC __forceinline__ void forEachInBins(Hist const &hist, V value, int n, Func func) {
   int bs = Hist::bin(value);
   int be = std::min(int(Hist::nbins() - 1), bs + n);
   bs = std::max(0, bs - n);
@@ -140,7 +155,7 @@ __host__ __device__ __forceinline__ void forEachInBins(Hist const &hist, V value
 
 // iteratate over bins containing all values in window wmin, wmax
 template <typename Hist, typename V, typename Func>
-__host__ __device__ __forceinline__ void forEachInWindow(Hist const &hist, V wmin, V wmax, Func const &func) {
+ALPAKA_FN_ACC __forceinline__ void forEachInWindow(Hist const &hist, V wmin, V wmax, Func const &func) {
   auto bs = Hist::bin(wmin);
   auto be = Hist::bin(wmax);
   assert(be >= bs);
@@ -191,7 +206,7 @@ public:
 
   static constexpr auto histOff(uint32_t nh) { return NBINS * nh; }
 
-  __host__ static size_t wsSize() {
+   static size_t wsSize() {
 #ifdef __CUDACC__
     uint32_t *v = nullptr;
     void *d_temp_storage = nullptr;
@@ -209,12 +224,12 @@ public:
     return (t >> shift) & mask;
   }
 
-  __host__ __device__ void zero() {
+  ALPAKA_FN_ACC void zero() {
     for (auto &i : off)
       i = 0;
   }
 
-  __host__ __device__ void add(CountersOnly const &co) {
+  ALPAKA_FN_ACC void add(CountersOnly const &co) {
     for (uint32_t i = 0; i < totbins(); ++i) {
 #ifdef __CUDA_ARCH__
       atomicAdd(off + i, co.off[i]);
@@ -224,7 +239,7 @@ public:
     }
   }
 
-  static __host__ __device__ __forceinline__ uint32_t atomicIncrement(Counter &x) {
+  static ALPAKA_FN_ACC __forceinline__ uint32_t atomicIncrement(Counter &x) {
 #ifdef __CUDA_ARCH__
     return atomicAdd(&x, 1);
 #else
@@ -232,7 +247,7 @@ public:
 #endif
   }
 
-  static __host__ __device__ __forceinline__ uint32_t atomicDecrement(Counter &x) {
+  static ALPAKA_FN_ACC __forceinline__ uint32_t atomicDecrement(Counter &x) {
 #ifdef __CUDA_ARCH__
     return atomicSub(&x, 1);
 #else
@@ -240,19 +255,19 @@ public:
 #endif
   }
 
-  __host__ __device__ __forceinline__ void countDirect(T b) {
+  ALPAKA_FN_ACC __forceinline__ void countDirect(T b) {
     assert(b < nbins());
     atomicIncrement(off[b]);
   }
 
-  __host__ __device__ __forceinline__ void fillDirect(T b, index_type j) {
+  ALPAKA_FN_ACC __forceinline__ void fillDirect(T b, index_type j) {
     assert(b < nbins());
     auto w = atomicDecrement(off[b]);
     assert(w > 0);
     bins[w - 1] = j;
   }
 
-  __device__ __host__ __forceinline__ int32_t bulkFill(AtomicPairCounter &apc, index_type const *v, uint32_t n) {
+  ALPAKA_FN_ACC __forceinline__ int32_t bulkFill(AtomicPairCounter &apc, index_type const *v, uint32_t n) {
     auto c = apc.add(n);
     if (c.m >= nbins())
       return -int32_t(c.m);
@@ -262,11 +277,12 @@ public:
     return c.m;
   }
 
-  __device__ __host__ __forceinline__ void bulkFinalize(AtomicPairCounter const &apc) {
+  ALPAKA_FN_ACC __forceinline__ void bulkFinalize(AtomicPairCounter const &apc) {
     off[apc.get().m] = apc.get().n;
   }
 
-  __device__ __host__ __forceinline__ void bulkFinalizeFill(AtomicPairCounter const &apc) {
+  template< typename T_Acc >
+  ALPAKA_FN_ACC __forceinline__ void bulkFinalizeFill(T_Acc const & acc, AtomicPairCounter const &apc) {
     auto m = apc.get().m;
     auto n = apc.get().n;
     auto first = m + blockDim.x * blockIdx.x + threadIdx.x;
@@ -275,13 +291,13 @@ public:
     }
   }
 
-  __host__ __device__ __forceinline__ void count(T t) {
+  ALPAKA_FN_ACC __forceinline__ void count(T t) {
     uint32_t b = bin(t);
     assert(b < nbins());
     atomicIncrement(off[b]);
   }
 
-  __host__ __device__ __forceinline__ void fill(T t, index_type j) {
+  ALPAKA_FN_ACC __forceinline__ void fill(T t, index_type j) {
     uint32_t b = bin(t);
     assert(b < nbins());
     auto w = atomicDecrement(off[b]);
@@ -289,7 +305,7 @@ public:
     bins[w - 1] = j;
   }
 
-  __host__ __device__ __forceinline__ void count(T t, uint32_t nh) {
+  ALPAKA_FN_ACC __forceinline__ void count(T t, uint32_t nh) {
     uint32_t b = bin(t);
     assert(b < nbins());
     b += histOff(nh);
@@ -297,7 +313,7 @@ public:
     atomicIncrement(off[b]);
   }
 
-  __host__ __device__ __forceinline__ void fill(T t, index_type j, uint32_t nh) {
+  ALPAKA_FN_ACC __forceinline__ void fill(T t, index_type j, uint32_t nh) {
     uint32_t b = bin(t);
     assert(b < nbins());
     b += histOff(nh);
@@ -307,7 +323,7 @@ public:
     bins[w - 1] = j;
   }
 
-  __device__ __host__ __forceinline__ void finalize(Counter *ws = nullptr) {
+ ALPAKA_FN_ACC  __forceinline__ void finalize(Counter *ws = nullptr) {
     assert(off[totbins() - 1] == 0);
     blockPrefixScan(off, totbins(), ws);
     assert(off[totbins() - 1] == off[totbins() - 2]);

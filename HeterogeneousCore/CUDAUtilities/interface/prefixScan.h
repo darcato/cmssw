@@ -7,19 +7,24 @@
 #include "HeterogeneousCore/CUDAUtilities/interface/cuda_assert.h"
 
 #ifdef __CUDA_ARCH__
-template <typename T>
-__device__ void __forceinline__ warpPrefixScan(T const* __restrict__ ci, T* __restrict__ co, uint32_t i, uint32_t mask) {
-  // ci and co may be the same
-  auto x = ci[i];
-  auto laneId = threadIdx.x & 0x1f;
+template<typename T>
+struct warpPrefixScan
+{
+    template< typename T_Acc >
+    ALPAKA_FN_ACC
+    void operator()( T_Acc const & acc, T const* __restrict__ ci, T* __restrict__ co, uint32_t i, uint32_t mask) const {
+    // ci and co may be the same
+    auto x = ci[i];
+    auto laneId = threadIdx.x & 0x1f;
 #pragma unroll
-  for (int offset = 1; offset < 32; offset <<= 1) {
-    auto y = __shfl_up_sync(mask, x, offset);
-    if (laneId >= offset)
-      x += y;
+    for (int offset = 1; offset < 32; offset <<= 1) {
+      auto y = __shfl_up_sync(mask, x, offset);
+      if (laneId >= offset)
+        x += y;
+    }
+    co[i] = x;
   }
-  co[i] = x;
-}
+};
 #endif
 
 //same as above may remove
@@ -126,44 +131,49 @@ __device__ __host__ void __forceinline__ blockPrefixScan(T* c,
 }
 
 // limited to 1024*1024 elements....
-template <typename T>
-__global__ void multiBlockPrefixScan(T const* __restrict__ ci, T* __restrict__ co, int32_t size, int32_t* pc) {
-  __shared__ T ws[32];
-  // first each block does a scan of size 1024; (better be enough blocks....)
-  assert(1024 * gridDim.x >= size);
-  int off = 1024 * blockIdx.x;
-  if (size - off > 0)
-    blockPrefixScan(ci + off, co + off, std::min(1024, size - off), ws);
+template<typename T>
+struct multiBlockPrefixScan
+{
+  template< typename T_Acc >
+  ALPAKA_FN_ACC
+  void operator()( T_Acc const & acc, T const* __restrict__ ci, T* __restrict__ co, int32_t size, int32_t* pc) const {
+    __shared__ T ws[32];
+    // first each block does a scan of size 1024; (better be enough blocks....)
+    assert(1024 * gridDim.x >= size);
+    int off = 1024 * blockIdx.x;
+    if (size - off > 0)
+      blockPrefixScan(ci + off, co + off, std::min(1024, size - off), ws);
 
-  // count blocks that finished
-  __shared__ bool isLastBlockDone;
-  if (0 == threadIdx.x) {
-    auto value = atomicAdd(pc, 1);  // block counter
-    isLastBlockDone = (value == (gridDim.x - 1));
+    // count blocks that finished
+    __shared__ bool isLastBlockDone;
+    if (0 == threadIdx.x) {
+      auto value = atomicAdd(pc, 1);  // block counter
+      isLastBlockDone = (value == (gridDim.x - 1));
+    }
+
+    __syncthreads();
+
+    if (!isLastBlockDone)
+      return;
+
+    // good each block has done its work and now we are left in last block
+
+    // let's get the partial sums from each block
+    __shared__ T psum[1024];
+    for (int i = threadIdx.x; i < gridDim.x; i += blockDim.x) {
+      auto j = 1024 * i + 1023;
+      psum[i] = (j < size) ? co[j] : T(0);
+    }
+    __syncthreads();
+    blockPrefixScan(psum, psum, gridDim.x, ws);
+
+    // now it would have been handy to have the other blocks around...
+    int first = threadIdx.x;                                 // + blockDim.x * blockIdx.x
+    for (int i = first + 1024; i < size; i += blockDim.x) {  //  *gridDim.x) {
+      auto k = i / 1024;                                     // block
+      co[i] += psum[k - 1];
+    }
   }
-
-  __syncthreads();
-
-  if (!isLastBlockDone)
-    return;
-
-  // good each block has done its work and now we are left in last block
-
-  // let's get the partial sums from each block
-  __shared__ T psum[1024];
-  for (int i = threadIdx.x; i < gridDim.x; i += blockDim.x) {
-    auto j = 1024 * i + 1023;
-    psum[i] = (j < size) ? co[j] : T(0);
-  }
-  __syncthreads();
-  blockPrefixScan(psum, psum, gridDim.x, ws);
-
-  // now it would have been handy to have the other blocks around...
-  int first = threadIdx.x;                                 // + blockDim.x * blockIdx.x
-  for (int i = first + 1024; i < size; i += blockDim.x) {  //  *gridDim.x) {
-    auto k = i / 1024;                                     // block
-    co[i] += psum[k - 1];
-  }
-}
+};
 
 #endif  // HeterogeneousCore_CUDAUtilities_interface_prefixScan_h

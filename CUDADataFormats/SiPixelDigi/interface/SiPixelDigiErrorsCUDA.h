@@ -6,7 +6,7 @@
 #include "HeterogeneousCore/CUDAUtilities/interface/host_unique_ptr.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/GPUSimpleVector.h"
 
-#include <cuda/api_wrappers.h>
+//#include <cuda/api_wrappers.h>
 
 class SiPixelDigiErrorsCUDA {
 public:

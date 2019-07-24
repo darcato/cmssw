@@ -3,8 +3,9 @@
 
 #include <iostream>
 #include <sstream>
+#include "RecoPixelVertexing/PixelTrackFitting/test/cms_cupla.h"
 #include <cuda.h>
-#include <cuda_runtime.h>
+//#include <cuda_runtime.h>
 
 namespace {
 

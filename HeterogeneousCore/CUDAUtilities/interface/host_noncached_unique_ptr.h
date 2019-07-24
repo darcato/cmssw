@@ -14,7 +14,7 @@ namespace cudautils {
         class HostDeleter {
         public:
           void operator()(void *ptr) {
-            cuda::throw_if_error(cudaFreeHost(ptr));
+            throw_if_error(cudaFreeHost(ptr));
           }
         };
       }
@@ -42,7 +42,7 @@ namespace cudautils {
   make_host_noncached_unique(unsigned int flags = cudaHostAllocDefault) {
     static_assert(std::is_trivially_constructible<T>::value, "Allocating with non-trivial constructor on the pinned host memory is not supported");
     void *mem;
-    cuda::throw_if_error(cudaHostAlloc(&mem, sizeof(T), flags));
+    throw_if_error(cudaHostAlloc(&mem, sizeof(T), flags));
     return typename cudautils::host::noncached::impl::make_host_unique_selector<T>::non_array(reinterpret_cast<T *>(mem));
   }
 
@@ -52,7 +52,7 @@ namespace cudautils {
     using element_type = typename std::remove_extent<T>::type;
     static_assert(std::is_trivially_constructible<element_type>::value, "Allocating with non-trivial constructor on the pinned host memory is not supported");
     void *mem;
-    cuda::throw_if_error(cudaHostAlloc(&mem, n*sizeof(element_type), flags));
+    throw_if_error(cudaHostAlloc(&mem, n*sizeof(element_type), flags));
     return typename cudautils::host::noncached::impl::make_host_unique_selector<T>::unbounded_array(reinterpret_cast<element_type *>(mem));
   }
 

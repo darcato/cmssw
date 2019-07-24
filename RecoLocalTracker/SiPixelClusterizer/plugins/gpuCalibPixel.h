@@ -7,7 +7,8 @@
 #include "CondFormats/SiPixelObjects/interface/SiPixelGainForHLTonGPU.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/cuda_assert.h"
 
-#include "gpuClusteringConstants.h"
+#include "gpuClusteringConstants.h" 
+#include "RecoPixelVertexing/PixelTrackFitting/test/cms_cupla.h"
 
 namespace gpuCalibPixel {
 
@@ -18,7 +19,11 @@ namespace gpuCalibPixel {
   constexpr float VCaltoElectronOffset = -60;      // L2-4: -60 +- 130
   constexpr float VCaltoElectronOffset_L1 = -670;  // L1:   -670 +- 220
 
-  __global__ void calibDigis(uint16_t* id,
+  struct calibDigis {
+    template <typename T_Acc>
+    ALPAKA_FN_ACC
+    void operator()(T_Acc const& acc,
+                             uint16_t* id,
                              uint16_t const* __restrict__ x,
                              uint16_t const* __restrict__ y,
                              uint16_t* adc,
@@ -27,13 +32,13 @@ namespace gpuCalibPixel {
                              uint32_t* __restrict__ moduleStart,        // just to zero first
                              uint32_t* __restrict__ nClustersInModule,  // just to zero them
                              uint32_t* __restrict__ clusModuleStart     // just to zero first
-  ) {
+  ) const {
     int first = blockDim.x * blockIdx.x + threadIdx.x;
 
     // zero for next kernels...
     if (0 == first)
       clusModuleStart[0] = moduleStart[0] = 0;
-    for (int i = first; i < gpuClustering::MaxNumModules; i += gridDim.x * blockDim.x) {
+    for (uint32_t i = first; i < gpuClustering::MaxNumModules; i += gridDim.x * blockDim.x) {
       nClustersInModule[i] = 0;
     }
 
@@ -62,6 +67,7 @@ namespace gpuCalibPixel {
       }
     }
   }
+  };
 }  // namespace gpuCalibPixel
 
 #endif  // RecoLocalTracker_SiPixelClusterizer_plugins_gpuCalibPixel_h

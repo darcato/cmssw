@@ -7,18 +7,23 @@
 #include "HeterogeneousCore/CUDAUtilities/interface/cuda_assert.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/prefixScan.h"
 
+#include "RecoPixelVertexing/PixelTrackFitting/test/cms_cupla.h"
+
 #include "gpuClusteringConstants.h"
 
 namespace gpuClustering {
 
-  __global__ void clusterChargeCut(
+  struct clusterChargeCut {
+    template <typename T_Acc>
+    ALPAKA_FN_ACC
+    void operator()(T_Acc const& acc,
       uint16_t* __restrict__ id,                 // module id of each pixel (modified if bad cluster)
       uint16_t const* __restrict__ adc,          //  charge of each pixel
       uint32_t const* __restrict__ moduleStart,  // index of the first pixel of each module
       uint32_t* __restrict__ nClustersInModule,  // modified: number of clusters found in each module
       uint32_t const* __restrict__ moduleId,     // module id of each module
       int32_t* __restrict__ clusterId,           // modified: cluster id of each pixel
-      uint32_t numElements) {
+      uint32_t numElements) const {
     if (blockIdx.x >= moduleStart[0])
       return;
 
@@ -52,7 +57,7 @@ namespace gpuClustering {
         continue;  // not valid
       if (id[i] != thisModuleId)
         break;  // end of module
-      atomicAdd(&charge[clusterId[i]], adc[i]);
+      atomicAdd(&charge[clusterId[i]], (int) adc[i]); //requires an int as 2 arg ??
     }
     __syncthreads();
 
@@ -97,6 +102,7 @@ namespace gpuClustering {
 
     //done
   }
+  };
 
 }  // namespace gpuClustering
 

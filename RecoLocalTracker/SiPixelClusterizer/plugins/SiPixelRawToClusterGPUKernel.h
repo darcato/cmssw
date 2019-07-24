@@ -2,8 +2,10 @@
 #define RecoLocalTracker_SiPixelClusterizer_plugins_SiPixelRawToClusterGPUKernel_h
 
 #include <algorithm>
-#include <cuda_runtime.h>
-#include "cuda/api_wrappers.h"
+
+// Cupla includes
+//#define CUPLA_STREAM_ASYNC_ENABLED 1
+#include "RecoPixelVertexing/PixelTrackFitting/test/cms_cupla.h"
 
 #include "CUDADataFormats/SiPixelDigi/interface/SiPixelDigisCUDA.h"
 #include "CUDADataFormats/SiPixelDigi/interface/SiPixelDigiErrorsCUDA.h"
@@ -90,7 +92,7 @@ namespace pixelgpudetails {
     using PackedDigiType = uint32_t;
 
     // Constructor: pre-computes masks and shifts from field widths
-    __host__ __device__
+    ALPAKA_FN_ACC
     inline
     constexpr Packing(unsigned int row_w, unsigned int column_w,
                       unsigned int time_w, unsigned int adc_w) :
@@ -131,14 +133,14 @@ namespace pixelgpudetails {
     uint32_t  max_adc;
   };
 
-  __host__ __device__
+  ALPAKA_FN_ACC
   inline
   constexpr Packing packing() {
     return Packing(11, 11, 0, 10);
   }
 
 
-  __host__ __device__
+  ALPAKA_FN_ACC
   inline
   uint32_t pack(uint32_t row, uint32_t col, uint32_t adc) {
     constexpr Packing thePacking = packing();

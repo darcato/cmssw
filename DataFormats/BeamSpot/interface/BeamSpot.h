@@ -29,8 +29,8 @@ namespace reco {
     typedef math::XYZPoint Point;
     enum { dimension = 7 };
     typedef math::Error<dimension>::type CovarianceMatrix;
-    enum { dim3 = 3 };
-    typedef math::Error<dim3>::type Covariance3DMatrix;
+    enum { dimension3 = 3 };
+    typedef math::Error<dimension3>::type Covariance3DMatrix;
     enum { resdim = 2 };
     typedef math::Error<resdim>::type ResCovMatrix;
 	

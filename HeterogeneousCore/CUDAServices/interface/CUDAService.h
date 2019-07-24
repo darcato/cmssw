@@ -4,7 +4,7 @@
 #include <utility>
 #include <vector>
 
-#include <cuda/api_wrappers.h>
+//#include <cuda/api_wrappers.h>
 
 #include "FWCore/Utilities/interface/StreamID.h"
 

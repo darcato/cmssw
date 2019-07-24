@@ -6,6 +6,7 @@
 <use name="cuda"/>
 <use name="cuda-api-wrappers"/>
 <use name="cub"/>
+<flags CXXFLAGS="-g -I/data/user/dmarcato/cupla/include/ -I/data/user/dmarcato/alpaka/include"/>
 
 <export>
     <lib name="1"/>
