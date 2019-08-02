@@ -226,11 +226,13 @@ namespace clusterSLOnGPU {
 
     int ev = ++evId;
     int threadsPerBlock = 256;
+    cudaOccupancyMaxPotentialBlockSize (nullptr, &threadsPerBlock, verifyZero);
 
     int blocks = (nhits + threadsPerBlock - 1) / threadsPerBlock;
     verifyZero<<<blocks, threadsPerBlock, 0, stream.id()>>>(nhits, sl.me_d);
     cudaCheck(cudaGetLastError());
 
+    cudaOccupancyMaxPotentialBlockSize (nullptr, &threadsPerBlock, simLink);
     blocks = (ndigis + threadsPerBlock - 1) / threadsPerBlock;
 
     assert(sl.me_d);
@@ -240,7 +242,8 @@ namespace clusterSLOnGPU {
     if (doDump) {
       cudaStreamSynchronize(stream.id());  // flush previous printf
       // one line == 200B so each kernel can print only 5K lines....
-      blocks = 16;  // (nhits + threadsPerBlock - 1) / threadsPerBlock;
+      cudaOccupancyMaxPotentialBlockSize (nullptr, &threadsPerBlock, dumpLink);
+      blocks = (nhits + threadsPerBlock - 1) / threadsPerBlock;
       for (int first = 0; first < int(nhits); first += blocks * threadsPerBlock) {
         dumpLink<<<blocks, threadsPerBlock, 0, stream.id()>>>(first, ev, hh.view(), nhits, sl.me_d);
         cudaCheck(cudaGetLastError());

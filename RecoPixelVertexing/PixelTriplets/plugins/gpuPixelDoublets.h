@@ -84,8 +84,8 @@ namespace gpuPixelDoublets {
       isOuterHitOfCell[i].reset();
   }
 
-  constexpr auto getDoubletsFromHistoMaxBlockSize = 64;  // for both x and y
-  constexpr auto getDoubletsFromHistoMinBlocksPerMP = 16;
+  constexpr auto getDoubletsFromHistoMaxBlockSize = 32;  // for both x and y
+  constexpr auto getDoubletsFromHistoMinBlocksPerMP = 8;
 
   __global__ __launch_bounds__(
       getDoubletsFromHistoMaxBlockSize,

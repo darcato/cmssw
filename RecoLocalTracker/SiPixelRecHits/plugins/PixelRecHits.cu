@@ -43,7 +43,8 @@ namespace pixelgpudetails {
     auto nHits = clusters_d.nClusters();
     TrackingRecHit2DCUDA hits_d(nHits, cpeParams, clusters_d.clusModuleStart(), stream);
 
-    int threadsPerBlock = 128;
+    int threadsPerBlock = 32;
+    cudaOccupancyMaxPotentialBlockSize(nullptr, &threadsPerBlock, gpuPixelRecHits::getHits);
     int blocks = digis_d.nModules();  // active modules (with digis)
 
 #ifdef GPU_DEBUG
@@ -59,7 +60,8 @@ namespace pixelgpudetails {
     cudaCheck(cudaGetLastError());
 
     // assuming full warp of threads is better than a smaller number...
-    setHitsLayerStart<<<1, 32, 0, stream.id()>>>(clusters_d.clusModuleStart(), cpeParams, hits_d.hitsLayerStart());
+    cudaOccupancyMaxPotentialBlockSize (nullptr, &threadsPerBlock, setHitsLayerStart);          
+    setHitsLayerStart<<<1, threadsPerBlock, 0, stream.id()>>>(clusters_d.clusModuleStart(), cpeParams, hits_d.hitsLayerStart());
     cudaCheck(cudaGetLastError());
 
     if (nHits >= TrackingRecHit2DSOAView::maxHits()) {

@@ -194,7 +194,8 @@ void HelixFitOnGPU::launchRiemannKernels(HitsOnCPU const &hh,
                                          cuda::stream_t<> &stream) {
   assert(tuples_d);
 
-  auto blockSize = 64;
+  int blockSize = 64;
+  cudaOccupancyMaxPotentialBlockSize (nullptr, &blockSize, kernelFastFit<3>);       
   auto numberOfBlocks = (maxNumberOfConcurrentFits_ + blockSize - 1) / blockSize;
 
   //  Fit internals
@@ -243,6 +244,8 @@ void HelixFitOnGPU::launchRiemannKernels(HitsOnCPU const &hh,
     cudaCheck(cudaGetLastError());
 
     // quads
+    cudaOccupancyMaxPotentialBlockSize (nullptr, &blockSize, kernelFastFit<4>);       
+    numberOfBlocks = (maxNumberOfConcurrentFits_ + blockSize - 1) / blockSize;
     kernelFastFit<4><<<numberOfBlocks, blockSize, 0, stream.id()>>>(tuples_d,
                                                                     tupleMultiplicity_d,
                                                                     4,
@@ -308,6 +311,8 @@ void HelixFitOnGPU::launchRiemannKernels(HitsOnCPU const &hh,
       cudaCheck(cudaGetLastError());
     } else {
       // penta all 5
+      cudaOccupancyMaxPotentialBlockSize (nullptr, &blockSize, kernelFastFit<5>);       
+      numberOfBlocks = (maxNumberOfConcurrentFits_ + blockSize - 1) / blockSize;
       kernelFastFit<5><<<numberOfBlocks, blockSize, 0, stream.id()>>>(tuples_d,
                                                                       tupleMultiplicity_d,
                                                                       5,

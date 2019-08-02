@@ -189,8 +189,9 @@ void HelixFitOnGPU::launchBrokenLineKernels(HitsOnCPU const &hh,
                                             cuda::stream_t<> &stream) {
   assert(tuples_d);
 
-  auto blockSize = 64;
-  auto numberOfBlocks = (maxNumberOfConcurrentFits_ + blockSize - 1) / blockSize;
+  int blockSize = 40;
+  cudaOccupancyMaxPotentialBlockSize (nullptr, &blockSize, kernelBLFit<3>);
+  int numberOfBlocks = (maxNumberOfConcurrentFits_ + blockSize - 1) / blockSize;
 
   //  Fit internals
   edm::Service<CUDAService> cs;
@@ -224,6 +225,8 @@ void HelixFitOnGPU::launchBrokenLineKernels(HitsOnCPU const &hh,
     cudaCheck(cudaGetLastError());
 
     // fit quads
+    cudaOccupancyMaxPotentialBlockSize (&numberOfBlocks, &blockSize, kernelBLFit<4>);
+    numberOfBlocks = (maxNumberOfConcurrentFits_ + blockSize - 1) / blockSize;
     kernelBLFastFit<4><<<numberOfBlocks, blockSize, 0, stream.id()>>>(tuples_d,
                                                                       tupleMultiplicity_d,
                                                                       hh.view(),
@@ -267,6 +270,8 @@ void HelixFitOnGPU::launchBrokenLineKernels(HitsOnCPU const &hh,
       cudaCheck(cudaGetLastError());
     } else {
       // fit penta (all 5)
+      cudaOccupancyMaxPotentialBlockSize (&numberOfBlocks, &blockSize, kernelBLFit<5>);
+      numberOfBlocks = (maxNumberOfConcurrentFits_ + blockSize - 1) / blockSize;  
       kernelBLFastFit<5><<<numberOfBlocks, blockSize, 0, stream.id()>>>(tuples_d,
                                                                         tupleMultiplicity_d,
                                                                         hh.view(),
@@ -276,7 +281,7 @@ void HelixFitOnGPU::launchBrokenLineKernels(HitsOnCPU const &hh,
                                                                         5,
                                                                         offset);
       cudaCheck(cudaGetLastError());
-
+  
       kernelBLFit<5><<<numberOfBlocks, blockSize, 0, stream.id()>>>(tupleMultiplicity_d,
                                                                     bField_,
                                                                     helix_fit_results_d,
