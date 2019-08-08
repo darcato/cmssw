@@ -87,7 +87,8 @@ void entryPoint(
     // 
     // 1d preparation kernel
     //
-    unsigned int nchannels_per_block = 32;
+    int nchannels_per_block = 32;
+    cudaOccupancyMaxPotentialBlockSize (nullptr, &nchannels_per_block, kernel_prep_1d_and_initialize);     
     unsigned int threads_1d = 10 * nchannels_per_block;
     unsigned int blocks_1d = threads_1d > 10*totalChannels 
         ? 1 : (totalChannels*10 + threads_1d - 1) / threads_1d;
@@ -165,8 +166,10 @@ void entryPoint(
         // TODO: this guy can run concurrently with other kernels,
         // there is no dependence on the order of execution
         //
-        unsigned int threads_time_init = threads_1d;
-        unsigned int blocks_time_init = blocks_1d;
+        cudaOccupancyMaxPotentialBlockSize (nullptr, &nchannels_per_block, kernel_time_computation_init);     
+        unsigned int threads_time_init = 10 * nchannels_per_block;
+        unsigned int blocks_time_init = threads_1d > 10*totalChannels 
+                        ? 1 : (totalChannels*10 + threads_1d - 1) / threads_1d;
         int sharedBytesInit = 2 * threads_time_init * sizeof(SampleVector::Scalar);
         kernel_time_computation_init<<<blocks_time_init, threads_time_init,
                                        sharedBytesInit, cudaStream.id()>>>(
@@ -218,10 +221,12 @@ void entryPoint(
         //
         // 
         //
+        cudaOccupancyMaxPotentialBlockSize (nullptr, &nchannels_per_block, kernel_time_compute_nullhypot);     
         int sharedBytes = EcalDataFrame::MAXSAMPLES * nchannels_per_block *
             4 * sizeof(SampleVector::Scalar);
-        auto const threads_nullhypot = threads_1d;
-        auto const blocks_nullhypot = blocks_1d;
+        auto const threads_nullhypot = 10 * nchannels_per_block;
+        auto const blocks_nullhypot = threads_1d > 10*totalChannels 
+                        ? 1 : (totalChannels*10 + threads_1d - 1) / threads_1d;
         kernel_time_compute_nullhypot<<<blocks_nullhypot, threads_nullhypot, 
                                         sharedBytes, cudaStream.id()>>>(
             scratch.sample_values,

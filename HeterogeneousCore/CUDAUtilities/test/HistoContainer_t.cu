@@ -74,7 +74,7 @@ void go() {
 
     cuda::memory::copy(v_d.get(), v, N*sizeof(T));
 
-    cudautils::fillManyFromVector(h_d.get(),ws_d.get(),nParts,v_d.get(),off_d.get(),offsets[10],256,0);
+    cudautils::fillManyFromVector(h_d.get(),ws_d.get(),nParts,v_d.get(),off_d.get(),offsets[10],0);
 
     cuda::memory::copy(&h, h_d.get(), sizeof(Hist));                                
     assert(0==h.off[0]);

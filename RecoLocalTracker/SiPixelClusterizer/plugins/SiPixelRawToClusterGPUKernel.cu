@@ -612,7 +612,8 @@ namespace pixelgpudetails {
       std::cout << "CUDA countModules kernel launch with " << blocks << " blocks of " << threadsPerBlock
                 << " threads\n";
 #endif
-
+      cudaOccupancyMaxPotentialBlockSize (nullptr, &threadsPerBlock, countModules);
+      blocks = (std::max(int(wordCounter), int(gpuClustering::MaxNumModules)) + threadsPerBlock - 1) / threadsPerBlock;
       countModules<<<blocks, threadsPerBlock, 0, stream.id()>>>(
           digis_d.c_moduleInd(), clusters_d.moduleStart(), digis_d.clus(), wordCounter);
       cudaCheck(cudaGetLastError());

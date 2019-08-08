@@ -97,7 +97,7 @@ struct ConfigurationParameters {
     type outOfTimeThreshG61pEE, outOfTimeThreshG61mEE;
     type outOfTimeThreshG61pEB, outOfTimeThreshG61mEB;
 
-    std::array<uint32_t, 3> kernelMinimizeThreads;
+    //std::array<uint32_t, 3> kernelMinimizeThreads;
 
     bool shouldRunTimingComputation;
 };

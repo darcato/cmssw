@@ -73,7 +73,7 @@ namespace pixelgpudetails {
       edm::Service<CUDAService> cs;
       auto hws = cs->make_device_unique<uint8_t[]>(TrackingRecHit2DSOAView::Hist::wsSize(), stream);
       cudautils::fillManyFromVector(
-          hits_d.phiBinner(), hws.get(), 10, hits_d.iphi(), hits_d.hitsLayerStart(), nHits, 256, stream.id());
+          hits_d.phiBinner(), hws.get(), 10, hits_d.iphi(), hits_d.hitsLayerStart(), nHits, stream.id());
       cudaCheck(cudaGetLastError());
     }
     return hits_d;

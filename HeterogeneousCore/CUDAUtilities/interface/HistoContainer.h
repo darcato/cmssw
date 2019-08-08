@@ -98,7 +98,6 @@ namespace cudautils {
                           T const *__restrict__ v,
                           uint32_t const *__restrict__ offsets,
                           uint32_t totSize,
-                          int nthreads,
                           cudaStream_t stream
 #ifndef __CUDACC__
                           = 0
@@ -106,10 +105,14 @@ namespace cudautils {
   ) {
     launchZero(h, stream);
 #ifdef __CUDACC__
+    int nthreads = 256;
+    cudaOccupancyMaxPotentialBlockSize(nullptr, &nthreads, countFromVector<Histo, T>);    
     auto nblocks = (totSize + nthreads - 1) / nthreads;
     countFromVector<<<nblocks, nthreads, 0, stream>>>(h, nh, v, offsets);
     cudaCheck(cudaGetLastError());
     launchFinalize(h, ws, stream);
+    cudaOccupancyMaxPotentialBlockSize(nullptr, &nthreads, fillFromVector<Histo, T>);    
+    nblocks = (totSize + nthreads - 1) / nthreads;
     fillFromVector<<<nblocks, nthreads, 0, stream>>>(h, nh, v, offsets);
     cudaCheck(cudaGetLastError());
 #else
