@@ -276,11 +276,12 @@ void minimization_procedure(
         ConditionsProducts const& conditions,
         ConfigurationParameters const& configParameters,
         cuda::stream_t<>& cudaStream) {
-    unsigned int totalChannels = eventInputCPU.ebDigis.size() 
+    int totalChannels = eventInputCPU.ebDigis.size() 
         + eventInputCPU.eeDigis.size();
 //    unsigned int threads_min = conf.threads.x;
     // TODO: configure from python
-    unsigned int threads_min = configParameters.kernelMinimizeThreads[0];
+    int threads_min = 32; //configParameters.kernelMinimizeThreads[0];
+    cudaOccupancyMaxPotentialBlockSize(nullptr, &threads_min, kernel_minimize);
     unsigned int blocks_min = threads_min > totalChannels
         ? 1
         : (totalChannels + threads_min - 1) / threads_min;
@@ -301,7 +302,7 @@ void minimization_procedure(
     // permute computed amplitudes
     // and assign the final uncalibared energy value
     //
-    unsigned int threadsPermute = 32 * EcalDataFrame::MAXSAMPLES; // 32 * 10
+    int threadsPermute = 32 * EcalDataFrame::MAXSAMPLES; // 32 * 10
     unsigned int blocksPermute = threadsPermute > 10 * totalChannels
         ? 1
         : (10 * totalChannels + threadsPermute - 1) / threadsPermute;
