@@ -59,6 +59,7 @@ void HGCalCLUEAlgo::populate(const HGCRecHitCollection& hits) {
     cells_[layer].detid.emplace_back(detid);
     cells_[layer].x.emplace_back(position.x());
     cells_[layer].y.emplace_back(position.y());
+    cells_[layer].layer.emplace_back(layer);
     if (!rhtools_.isOnlySilicon(layer)) {
       cells_[layer].isSi.emplace_back(rhtools_.isSilicon(detid));
       cells_[layer].eta.emplace_back(position.eta());
@@ -76,7 +77,7 @@ void HGCalCLUEAlgo::prepareDataStructures(unsigned int l) {
   cells_[l].nearestHigher.resize(cellsSize, -1);
   cells_[l].clusterIndex.resize(cellsSize, -1);
   cells_[l].followers.resize(cellsSize);
-  cells_[l].isSeed.resize(cellsSize, false);
+  cells_[l].isSeed.resize(cellsSize, 0);
   if (rhtools_.isOnlySilicon(l)) {
     cells_[l].isSi.resize(cellsSize, true);
     cells_[l].eta.resize(cellsSize, 0.f);
@@ -89,6 +90,7 @@ void HGCalCLUEAlgo::prepareDataStructures(unsigned int l) {
 // this method can be invoked multiple times for the same event with different
 // input (reset should be called between events)
 void HGCalCLUEAlgo::makeClusters() {
+  gpuRunner.clueGPU(cells_, numberOfClustersPerLayer_, vecDeltas_[0], vecDeltas_[1], vecDeltas_[2], kappa_, outlierDeltaFactor_);
   // assign all hits in each layer to a cluster core
   tbb::this_task_arena::isolate([&] {
     tbb::parallel_for(size_t(0), size_t(2 * maxlayer_ + 2), [&](size_t i) {
@@ -113,7 +115,8 @@ void HGCalCLUEAlgo::makeClusters() {
       numberOfClustersPerLayer_[i] = findAndAssignClusters(i, delta_c, delta_r);
     });
   });
-  //Now that we have the density per point we can store it
+
+  // Now that we have the density per point we can store it
   for (unsigned int i = 0; i < 2 * maxlayer_ + 2; ++i) {
     setDensity(i);
   }
@@ -157,7 +160,7 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
       for (auto cellIdx : cl) {
         energy += cellsOnLayer.weight[cellIdx];
         thisCluster.emplace_back(cellsOnLayer.detid[cellIdx], 1.f);
-        if (cellsOnLayer.isSeed[cellIdx]) {
+        if (cellsOnLayer.isSeed[cellIdx]==1) {
           seedDetId = cellsOnLayer.detid[cellIdx];
         }
       }
@@ -168,7 +171,6 @@ std::vector<reco::BasicCluster> HGCalCLUEAlgo::getClusters(bool) {
       clusters_v_[globalClusterIndex].setSeed(seedDetId);
       thisCluster.clear();
     }
-
     cellsIdInCluster.clear();
   }
   return clusters_v_;
@@ -470,7 +472,7 @@ int HGCalCLUEAlgo::findAndAssignClusters(const unsigned int layerId, float delta
     bool isOutlier = (cellsOnLayer.delta[i] > outlierDeltaFactor_ * delta) && (cellsOnLayer.rho[i] < rho_c);
     if (isSeed) {
       cellsOnLayer.clusterIndex[i] = nClustersOnLayer;
-      cellsOnLayer.isSeed[i] = true;
+      cellsOnLayer.isSeed[i] = 1;
       nClustersOnLayer++;
       localStack.push_back(i);
 

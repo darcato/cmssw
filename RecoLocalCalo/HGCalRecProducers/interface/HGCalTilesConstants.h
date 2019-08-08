@@ -30,6 +30,8 @@ namespace hgcaltilesconstants {
   constexpr int nColumnsEta = hgcaltilesconstants::ceil((maxEta - minEta) / tileSizeEtaPhi);
   constexpr int nRowsPhi = hgcaltilesconstants::ceil((maxPhi - minPhi) / tileSizeEtaPhi);
   constexpr int nTiles = nColumns * nRows + nColumnsEta * nRowsPhi;
+  
+  constexpr int maxTileDepth = 40;
 
 }  // namespace hgcaltilesconstants
 

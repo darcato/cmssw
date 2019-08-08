@@ -5,6 +5,7 @@
 #define RecoLocalCalo_HGCalRecAlgos_HGCalLayerTiles
 
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalTilesConstants.h"
+#include "DataFormats/DetId/interface/DetId.h"
 
 #include <vector>
 #include <array>
@@ -41,7 +42,9 @@ public:
     static_assert(xRange >= 0.);
     constexpr float r = hgcaltilesconstants::nColumns / xRange;
     int xBin = (x - hgcaltilesconstants::minX) * r;
-    xBin = std::clamp(xBin, 0, hgcaltilesconstants::nColumns);
+    // xBin = std::clamp(xBin, 0, hgcaltilesconstants::nColumns);
+    xBin = std::min(xBin,hgcaltilesconstants::nColumns);
+    xBin = std::max(xBin,0);
     return xBin;
   }
 
@@ -50,7 +53,9 @@ public:
     static_assert(yRange >= 0.);
     constexpr float r = hgcaltilesconstants::nRows / yRange;
     int yBin = (y - hgcaltilesconstants::minY) * r;
-    yBin = std::clamp(yBin, 0, hgcaltilesconstants::nRows);
+    // yBin = std::clamp(yBin, 0, hgcaltilesconstants::nRows);
+    yBin = std::min(yBin,hgcaltilesconstants::nRows);
+    yBin = std::max(yBin,0);
     return yBin;
   }
 
@@ -59,7 +64,9 @@ public:
     static_assert(etaRange >= 0.);
     constexpr float r = hgcaltilesconstants::nColumnsEta / etaRange;
     int etaBin = (eta - hgcaltilesconstants::minEta) * r;
-    etaBin = std::clamp(etaBin, 0, hgcaltilesconstants::nColumnsEta);
+    // etaBin = std::clamp(etaBin, 0, hgcaltilesconstants::nColumnsEta);
+    etaBin = std::min(etaBin,hgcaltilesconstants::nColumnsEta);
+    etaBin = std::max(etaBin,0);
     return etaBin;
   }
 
@@ -68,7 +75,9 @@ public:
     static_assert(phiRange >= 0.);
     constexpr float r = hgcaltilesconstants::nRowsPhi / phiRange;
     int phiBin = (phi - hgcaltilesconstants::minPhi) * r;
-    phiBin = std::clamp(phiBin, 0, hgcaltilesconstants::nRowsPhi);
+    // phiBin = std::clamp(phiBin, 0, hgcaltilesconstants::nRowsPhi);
+    phiBin = std::min(phiBin,hgcaltilesconstants::nRowsPhi);
+    phiBin = std::max(phiBin,0);
     return phiBin;
   }
 
@@ -114,6 +123,49 @@ public:
 
 private:
   std::array<std::vector<int>, hgcaltilesconstants::nTiles> tiles_;
+};
+
+struct CellsOnLayer {
+  std::vector<DetId> detid;
+  std::vector<bool> isSi;
+  std::vector<float> x;
+  std::vector<float> y;
+  std::vector<float> eta;
+  std::vector<float> phi;
+  std::vector<int> layer;
+
+  std::vector<float> weight;
+  std::vector<float> rho;
+
+  std::vector<float> delta;
+  std::vector<int> nearestHigher;
+  std::vector<int> clusterIndex;
+  std::vector<float> sigmaNoise;
+  std::vector<std::vector<int>> followers;
+  std::vector<int> isSeed;
+  // why use int instead of bool?
+  // https://en.cppreference.com/w/cpp/container/vector_bool
+  // std::vector<bool> behaves similarly to std::vector, but in order to be space efficient, it:
+  // Does not necessarily store its elements as a contiguous array (so &v[0] + n != &v[n])
+
+
+  void clear() {
+    detid.clear();
+    isSi.clear();
+    x.clear();
+    y.clear();
+    eta.clear();
+    phi.clear();
+    layer.clear();
+    weight.clear();
+    rho.clear();
+    delta.clear();
+    nearestHigher.clear();
+    clusterIndex.clear();
+    sigmaNoise.clear();
+    followers.clear();
+    isSeed.clear();
+  }
 };
 
 #endif

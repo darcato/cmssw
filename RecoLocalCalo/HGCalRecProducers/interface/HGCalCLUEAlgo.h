@@ -18,6 +18,7 @@
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTiles.h"
 
 #include "RecoLocalCalo/HGCalRecAlgos/interface/RecHitTools.h"
+#include "RecoLocalCalo/HGCalRecProducers/interface/HGCalCLUEAlgoGPURunner.h"
 
 // C/C++ headers
 #include <set>
@@ -135,46 +136,48 @@ private:
 
   bool use2x2_;
 
+  ClueGPURunner gpuRunner;
+
   // initialization bool
   bool initialized_;
 
   float outlierDeltaFactor_ = 2.f;
 
-  struct CellsOnLayer {
-    std::vector<DetId> detid;
-    std::vector<bool> isSi;
-    std::vector<float> x;
-    std::vector<float> y;
-    std::vector<float> eta;
-    std::vector<float> phi;
+  // struct CellsOnLayer {
+  //   std::vector<DetId> detid;
+  //   std::vector<bool> isSi;
+  //   std::vector<float> x;
+  //   std::vector<float> y;
+  //   std::vector<float> eta;
+  //   std::vector<float> phi;
 
-    std::vector<float> weight;
-    std::vector<float> rho;
+  //   std::vector<float> weight;
+  //   std::vector<float> rho;
 
-    std::vector<float> delta;
-    std::vector<int> nearestHigher;
-    std::vector<int> clusterIndex;
-    std::vector<float> sigmaNoise;
-    std::vector<std::vector<int>> followers;
-    std::vector<bool> isSeed;
+  //   std::vector<float> delta;
+  //   std::vector<int> nearestHigher;
+  //   std::vector<int> clusterIndex;
+  //   std::vector<float> sigmaNoise;
+  //   std::vector<std::vector<int>> followers;
+  //   std::vector<bool> isSeed;
 
-    void clear() {
-      detid.clear();
-      isSi.clear();
-      x.clear();
-      y.clear();
-      eta.clear();
-      phi.clear();
-      weight.clear();
-      rho.clear();
-      delta.clear();
-      nearestHigher.clear();
-      clusterIndex.clear();
-      sigmaNoise.clear();
-      followers.clear();
-      isSeed.clear();
-    }
-  };
+  //   void clear() {
+  //     detid.clear();
+  //     isSi.clear();
+  //     x.clear();
+  //     y.clear();
+  //     eta.clear();
+  //     phi.clear();
+  //     weight.clear();
+  //     rho.clear();
+  //     delta.clear();
+  //     nearestHigher.clear();
+  //     clusterIndex.clear();
+  //     sigmaNoise.clear();
+  //     followers.clear();
+  //     isSeed.clear();
+  //   }
+  // };
 
   std::vector<CellsOnLayer> cells_;
 
