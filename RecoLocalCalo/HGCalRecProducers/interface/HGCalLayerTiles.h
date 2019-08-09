@@ -19,7 +19,7 @@ public:
             const std::vector<float>& y,
             const std::vector<float>& eta,
             const std::vector<float>& phi,
-            const std::vector<bool>& isSi) {
+            const std::vector<int>& isSi) {
     auto cellsSize = x.size();
     for (unsigned int i = 0; i < cellsSize; ++i) {
       tiles_[getGlobalBin(x[i], y[i])].push_back(i);
@@ -127,20 +127,19 @@ private:
 
 struct CellsOnLayer {
   std::vector<DetId> detid;
-  std::vector<bool> isSi;
+  std::vector<int> isSi;
   std::vector<float> x;
   std::vector<float> y;
   std::vector<float> eta;
   std::vector<float> phi;
   std::vector<int> layer;
-
   std::vector<float> weight;
+  std::vector<float> sigmaNoise;
+  
   std::vector<float> rho;
-
   std::vector<float> delta;
   std::vector<int> nearestHigher;
   std::vector<int> clusterIndex;
-  std::vector<float> sigmaNoise;
   std::vector<std::vector<int>> followers;
   std::vector<int> isSeed;
   // why use int instead of bool?

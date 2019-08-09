@@ -31,7 +31,9 @@ __global__ void kernel_compute_histogram( HGCalLayerTilesGPU *d_hist,
   int idx = blockIdx.x * blockDim.x + threadIdx.x;
   if(idx < numberOfCells) {
     int layer = d_cells.layer[idx];
-    d_hist[layer].fill(d_cells.x[idx], d_cells.y[idx], idx);
+    d_hist[layer].fill(d_cells.x[idx], d_cells.y[idx], 
+                       d_cells.eta[idx], d_cells.phi[idx], 
+                       d_cells.isSi[idx], idx);
   }
   
 } //kernel

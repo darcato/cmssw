@@ -23,13 +23,16 @@ static const int BufferSizePerSeed = 20;
 struct CellsOnLayerPtr
 {
   unsigned int *detid;
+  int* isSi;
   float *x; 
-  float *y ;
-  int *layer ;
-  float *weight ;
-  float *sigmaNoise; 
+  float *y;
+  float* eta;
+  float* phi;
+  int *layer;
+  float *weight;
+  float *sigmaNoise;
 
-  float *rho ; 
+  float *rho;
   float *delta; 
   int *nearestHigher;
   int *clusterIndex; 
@@ -60,8 +63,11 @@ class ClueGPURunner{
         void init_device(){
             unsigned int reserveNumberOfCells = 1000000;
             cudaMalloc(&d_cells.detid, sizeof(unsigned int)*reserveNumberOfCells);
+            cudaMalloc(&d_cells.isSi, sizeof(int)*reserveNumberOfCells);
             cudaMalloc(&d_cells.x, sizeof(float)*reserveNumberOfCells);
             cudaMalloc(&d_cells.y, sizeof(float)*reserveNumberOfCells);
+            cudaMalloc(&d_cells.eta, sizeof(float)*reserveNumberOfCells);
+            cudaMalloc(&d_cells.phi, sizeof(float)*reserveNumberOfCells);
             cudaMalloc(&d_cells.layer, sizeof(int)*reserveNumberOfCells);
             cudaMalloc(&d_cells.weight, sizeof(float)*reserveNumberOfCells);
             cudaMalloc(&d_cells.sigmaNoise, sizeof(float)*reserveNumberOfCells);
@@ -80,12 +86,15 @@ class ClueGPURunner{
 
         void free_device(){
             cudaFree(d_cells.detid);
+            cudaFree(d_cells.isSi);
             cudaFree(d_cells.x);
             cudaFree(d_cells.y);
+            cudaFree(d_cells.eta);
+            cudaFree(d_cells.phi);
             cudaFree(d_cells.layer);
             cudaFree(d_cells.weight);
             cudaFree(d_cells.sigmaNoise);
-            
+
             cudaFree(d_cells.rho);
             cudaFree(d_cells.delta);
             cudaFree(d_cells.nearestHigher);
@@ -112,8 +121,11 @@ class ClueGPURunner{
 
         void copy_todevice(CellsOnLayer& cellsOnLayer){
             cudaMemcpy(d_cells.detid, cellsOnLayer.detid.data(), sizeof(unsigned int)*numberOfCells, cudaMemcpyHostToDevice);
+            cudaMemcpy(d_cells.isSi, cellsOnLayer.isSi.data(), sizeof(int)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.x, cellsOnLayer.x.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.y, cellsOnLayer.y.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
+            cudaMemcpy(d_cells.eta, cellsOnLayer.eta.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
+            cudaMemcpy(d_cells.phi, cellsOnLayer.phi.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.layer, cellsOnLayer.layer.data(), sizeof(int)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.weight, cellsOnLayer.weight.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice);
             cudaMemcpy(d_cells.sigmaNoise,cellsOnLayer.sigmaNoise.data(), sizeof(float)*numberOfCells, cudaMemcpyHostToDevice); 
