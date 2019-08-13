@@ -41,6 +41,9 @@ __global__ void kernel_compute_histogram( HGCalLayerTilesGPU *d_hist,
 __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist, 
                                         CellsOnLayerPtr d_cells, 
                                         float delta_c_EE, float delta_c_FH, float delta_c_BH,
+                                        float delta_r,
+                                        int scintMaxIphi_,
+                                        bool use2x2_,
                                         int numberOfCells
                                         ) 
 { 
@@ -50,31 +53,97 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
     double rho{0.};
     int layer = d_cells.layer[idxOne];
     float delta_c = getDeltaCFromLayer(layer, delta_c_EE, delta_c_FH, delta_c_BH);
-    float xOne = d_cells.x[idxOne];
-    float yOne = d_cells.y[idxOne];
-    // search box with histogram
-    int4 search_box = d_hist[layer].searchBox(xOne - delta_c, xOne + delta_c, yOne - delta_c, yOne + delta_c);
+    
+    if (d_cells.isSi[idxOne]) {
+      float xOne = d_cells.x[idxOne];
+      float yOne = d_cells.y[idxOne];
 
-    // loop over bins in search box
-    for(int xBin = search_box.x; xBin < search_box.y+1; ++xBin) {
-      for(int yBin = search_box.z; yBin < search_box.w+1; ++yBin) {
-        int binIndex = d_hist[layer].getGlobalBinByBin(xBin,yBin);
-        int binSize  = d_hist[layer][binIndex].size();
+      // search box with histogram
+      int4 search_box = d_hist[layer].searchBox(xOne - delta_c, xOne + delta_c, yOne - delta_c, yOne + delta_c);
 
-        // loop over bin contents
-        for (int j = 0; j < binSize; j++) {
-          int idxTwo = d_hist[layer][binIndex][j];
-          float xTwo = d_cells.x[idxTwo];
-          float yTwo = d_cells.y[idxTwo];
-          float distance = std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
-          if(distance < delta_c) { 
-            rho += (idxOne == idxTwo ? 1. : 0.5) * d_cells.weight[idxTwo];              
+      // loop over bins in search box
+      for(int xBin = search_box.x; xBin < search_box.y+1; ++xBin) {
+        for(int yBin = search_box.z; yBin < search_box.w+1; ++yBin) {
+          int binIndex = d_hist[layer].getGlobalBinByBin(xBin,yBin);
+          int binSize  = d_hist[layer][binIndex].size();
+
+          // loop over bin contents
+          for (int j = 0; j < binSize; j++) {
+            int idxTwo = d_hist[layer][binIndex][j];
+            float xTwo = d_cells.x[idxTwo];
+            float yTwo = d_cells.y[idxTwo];
+            if (d_cells.isSi[idxTwo]) {  //silicon cells cannot talk to scintillator cells
+              float distance = std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
+              if(distance < delta_c) { 
+                rho += (idxOne == idxTwo ? 1. : 0.5) * d_cells.weight[idxTwo];              
+              }
+            }
           }
         }
       }
+      d_cells.rho[idxOne] = rho;
+    } else {
+      float etaOne = d_cells.eta[idxOne];
+      float phiOne = d_cells.phi[idxOne];
+      
+      // search box with histogram
+      int4 search_box = d_hist[layer].searchBoxEtaPhi(etaOne - delta_r, etaOne + delta_r, phiOne - delta_r, phiOne + delta_r);
+
+      float northeast(0), northwest(0), southeast(0), southwest(0), all(0);
+
+      for (int etaBin = search_box.x; etaBin < search_box.y + 1; ++etaBin) {
+        for (int phiBin = search_box.z; phiBin < search_box.w + 1; ++phiBin) {
+          int binId = d_hist[layer].getGlobalBinByBinEtaPhi(etaBin, phiBin);
+          size_t binSize = d_hist[layer][binId].size();
+
+          for (unsigned int j = 0; j < binSize; j++) {
+            unsigned int idxTwo = d_hist[layer][binId][j];
+            float etaTwo = d_cells.eta[idxTwo];
+            float phiTwo = d_cells.phi[idxTwo];
+            if (!d_cells.isSi[idxTwo]) {  //scintillator cells cannot talk to silicon cells
+              
+              const float dphi = reco::deltaPhi(phiOne, phiTwo);
+              const float deta = etaOne - etaTwo;
+              const float distance = std::sqrt(deta * deta + dphi * dphi);
+              
+              if (distance < delta_r) {
+                int iPhiOne = HGCScintillatorDetId(d_cells.detid[idxOne]).iphi();
+                int iPhiTwo = HGCScintillatorDetId(d_cells.detid[idxTwo]).iphi();
+                int iEtaOne = HGCScintillatorDetId(d_cells.detid[idxOne]).ieta();
+                int iEtaTwo = HGCScintillatorDetId(d_cells.detid[idxTwo]).ieta();
+                int dIPhi = iPhiTwo - iPhiOne;
+                dIPhi += abs(dIPhi) < 2
+                             ? 0
+                             : dIPhi < 0 ? scintMaxIphi_
+                                         : -scintMaxIphi_;  // cells with iPhi=288 and iPhi=1 should be neiboring cells
+                int dIEta = iEtaTwo - iEtaOne;
+
+                if (idxTwo != idxOne) {
+                  auto neighborCellContribution = 0.5f * d_cells.weight[idxTwo];
+                  all += neighborCellContribution;
+                  if (dIPhi >= 0 && dIEta >= 0)
+                    northeast += neighborCellContribution;
+                  if (dIPhi <= 0 && dIEta >= 0)
+                    southeast += neighborCellContribution;
+                  if (dIPhi >= 0 && dIEta <= 0)
+                    northwest += neighborCellContribution;
+                  if (dIPhi <= 0 && dIEta <= 0)
+                    southwest += neighborCellContribution;
+                }
+              }
+            }
+          }
+        }
+      }
+      float neighborsval = (std::max(northeast, northwest) > std::max(southeast, southwest))
+                               ? std::max(northeast, northwest)
+                               : std::max(southeast, southwest);
+      if (use2x2_)
+        d_cells.rho[idxOne] += neighborsval;
+      else
+        d_cells.rho[idxOne] += all;
     }
-    d_cells.rho[idxOne] = rho;
-  }
+  } // if idx<num_of_cells
 } //kernel
 
 
@@ -241,13 +310,17 @@ __global__ void kernel_assign_clusters( GPU::VecArray<int,maxNSeeds>* d_seeds,
 
 void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
             std::vector<int> & numberOfClustersPerLayer_, 
-            float delta_c_EE, 
-            float delta_c_FH, 
-            float delta_c_BH, 
-            float kappa_,
-            float outlierDeltaFactor_
+            std::vector<double> & deltas_,
+            double kappa_,
+            float outlierDeltaFactor_,
+            int scintMaxIphi_,
+            bool use2x2_
             ) {
   const int numberOfLayers = cells_.size();
+  const float delta_c_EE = deltas_[0];
+  const float delta_c_FH = deltas_[1];
+  const float delta_c_BH = deltas_[2];
+  const float delta_r = deltas_[3];
 
   //////////////////////////////////////////////
   // copy from cells to local SoA
@@ -297,7 +370,7 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   const dim3 blockSize(1024,1,1);
   const dim3 gridSize(ceil(numberOfCells/1024.0),1,1);
   kernel_compute_histogram <<<gridSize,blockSize>>>(d_hist, d_cells, numberOfCells);
-  kernel_compute_density <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, numberOfCells);
+  kernel_compute_density <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, delta_r, scintMaxIphi_, use2x2_,numberOfCells);
   kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, outlierDeltaFactor_, numberOfCells);
   kernel_find_clusters <<<gridSize,blockSize>>>(d_seeds, d_followers, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, kappa_, outlierDeltaFactor_, numberOfCells);  
   

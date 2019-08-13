@@ -90,7 +90,7 @@ void HGCalCLUEAlgo::prepareDataStructures(unsigned int l) {
 // this method can be invoked multiple times for the same event with different
 // input (reset should be called between events)
 void HGCalCLUEAlgo::makeClusters() {
-  gpuRunner.clueGPU(cells_, numberOfClustersPerLayer_, vecDeltas_[0], vecDeltas_[1], vecDeltas_[2], kappa_, outlierDeltaFactor_);
+  gpuRunner.clueGPU(cells_, numberOfClustersPerLayer_, vecDeltas_, kappa_, outlierDeltaFactor_, scintMaxIphi_, use2x2_);
   // assign all hits in each layer to a cluster core
   tbb::this_task_arena::isolate([&] {
     tbb::parallel_for(size_t(0), size_t(2 * maxlayer_ + 2), [&](size_t i) {

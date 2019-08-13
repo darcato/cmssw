@@ -5,6 +5,8 @@
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTiles.h"
 #include "HeterogeneousCore/CUDAUtilities/interface/GPUVecArray.h"
 #include "RecoLocalCalo/HGCalRecProducers/interface/HGCalLayerTilesGPU.h"
+#include "DataFormats/Math/interface/deltaPhi.h"
+#include "DataFormats/ForwardDetId/interface/HGCScintillatorDetId.h"
 
 #include <cuda_runtime.h>
 #include <cuda.h>
@@ -108,7 +110,7 @@ class ClueGPURunner{
         }
 
         // algorithm functions
-        void clueGPU(std::vector<CellsOnLayer> &, std::vector<int> &, float, float, float, float, float);
+        void clueGPU(std::vector<CellsOnLayer> &, std::vector<int> &, std::vector<double> &, double, float, int, bool);
 
         void assign_number_of_cells(unsigned int n){
             numberOfCells = n;
