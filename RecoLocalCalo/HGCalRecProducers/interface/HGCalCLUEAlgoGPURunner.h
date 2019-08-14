@@ -41,7 +41,15 @@ struct CellsOnLayerPtr
   int *isSeed;
 };
 
+constexpr float distance(float xOne, float yOne, float xTwo, float yTwo) {
+    return std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
+}
 
+constexpr float distanceEtaPhi(float etaOne, float phiOne, float etaTwo, float phiTwo) {     
+    const float dphi = reco::deltaPhi(phiOne, phiTwo);
+    const float deta = etaOne - etaTwo;
+    return std::sqrt(deta * deta + dphi * dphi);
+}
 
 class ClueGPURunner{
     public:

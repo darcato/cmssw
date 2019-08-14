@@ -70,11 +70,9 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
           // loop over bin contents
           for (int j = 0; j < binSize; j++) {
             int idxTwo = d_hist[layer][binIndex][j];
-            float xTwo = d_cells.x[idxTwo];
-            float yTwo = d_cells.y[idxTwo];
             if (d_cells.isSi[idxTwo]) {  //silicon cells cannot talk to scintillator cells
-              float distance = std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
-              if(distance < delta_c) { 
+              float dist = distance(xOne, yOne, d_cells.x[idxTwo], d_cells.y[idxTwo]);
+              if(dist < delta_c) { 
                 rho += (idxOne == idxTwo ? 1. : 0.5) * d_cells.weight[idxTwo];              
               }
             }
@@ -98,15 +96,9 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
 
           for (unsigned int j = 0; j < binSize; j++) {
             unsigned int idxTwo = d_hist[layer][binId][j];
-            float etaTwo = d_cells.eta[idxTwo];
-            float phiTwo = d_cells.phi[idxTwo];
             if (!d_cells.isSi[idxTwo]) {  //scintillator cells cannot talk to silicon cells
-              
-              const float dphi = reco::deltaPhi(phiOne, phiTwo);
-              const float deta = etaOne - etaTwo;
-              const float distance = std::sqrt(deta * deta + dphi * dphi);
-              
-              if (distance < delta_r) {
+              const float dist = distanceEtaPhi(etaOne, phiOne, d_cells.eta[idxTwo], d_cells.phi[idxTwo]);  
+              if (dist < delta_r) {
                 int iPhiOne = HGCScintillatorDetId(d_cells.detid[idxOne]).iphi();
                 int iPhiTwo = HGCScintillatorDetId(d_cells.detid[idxTwo]).iphi();
                 int iEtaOne = HGCScintillatorDetId(d_cells.detid[idxOne]).ieta();
@@ -150,66 +142,116 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
 __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist, 
                                                 CellsOnLayerPtr d_cells, 
                                                 float delta_c_EE, float delta_c_FH, float delta_c_BH,
-                                                float outlierDeltaFactor_, 
+                                                float delta_r, float outlierDeltaFactor_, 
                                                 int numberOfCells
                                                 ) 
 {
   int idxOne = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idxOne < numberOfCells){
-    int layer = d_cells.layer[idxOne];
-    float delta_c = getDeltaCFromLayer(layer, delta_c_EE, delta_c_FH, delta_c_BH);
-
-
-    float idxOne_delta = std::numeric_limits<float>::max();
+    auto maxDelta = std::numeric_limits<float>::max();
+    float idxOne_delta = maxDelta;
     int idxOne_nearestHigher = -1;
-    float xOne = d_cells.x[idxOne];
-    float yOne = d_cells.y[idxOne];
     float rhoOne = d_cells.rho[idxOne];
+    int layer = d_cells.layer[idxOne];
 
-    // search box with histogram
-    int4 search_box = d_hist[layer].searchBox(xOne - delta_c, xOne + delta_c, yOne - delta_c, yOne + delta_c);
+    if (d_cells.isSi[idxOne]) {
+      float delta_c = getDeltaCFromLayer(layer, delta_c_EE, delta_c_FH, delta_c_BH);
 
-    // loop over bins in search box
-    for(int xBin = search_box.x; xBin < search_box.y+1; ++xBin) {
-      for(int yBin = search_box.z; yBin < search_box.w+1; ++yBin) {
-        int binIndex = d_hist[layer].getGlobalBinByBin(xBin,yBin);
-        int binSize  = d_hist[layer][binIndex].size();
+      float xOne = d_cells.x[idxOne];
+      float yOne = d_cells.y[idxOne];
+      
+      // search box with histogram
+      int4 search_box = d_hist[layer].searchBox(xOne - delta_c, xOne + delta_c, yOne - delta_c, yOne + delta_c);
 
-        // loop over bin contents
-        for (int j = 0; j < binSize; j++) {
-          int idxTwo = d_hist[layer][binIndex][j];
-          float xTwo = d_cells.x[idxTwo];
-          float yTwo = d_cells.y[idxTwo];
-          float distance = std::sqrt((xOne-xTwo)*(xOne-xTwo) + (yOne-yTwo)*(yOne-yTwo));
-          bool foundHigher = (d_cells.rho[idxTwo] > rhoOne) ;
-          // in the rare case where rho is the same, use detid
-          if (d_cells.rho[idxTwo] == rhoOne) {
-            foundHigher = d_cells.detid[idxTwo] > d_cells.detid[idxOne];
+      // loop over bins in search box
+      for(int xBin = search_box.x; xBin < search_box.y+1; ++xBin) {
+        for(int yBin = search_box.z; yBin < search_box.w+1; ++yBin) {
+          int binIndex = d_hist[layer].getGlobalBinByBin(xBin,yBin);
+          int binSize  = d_hist[layer][binIndex].size();
+
+          // loop over bin contents
+          for (int j = 0; j < binSize; j++) {
+            int idxTwo = d_hist[layer][binIndex][j];
+            if (d_cells.isSi[idxTwo]){
+              float dist = distance(xOne, yOne, d_cells.x[idxTwo], d_cells.y[idxTwo]);
+              bool foundHigher = (d_cells.rho[idxTwo] > rhoOne)||
+                                 (d_cells.rho[idxTwo] == rhoOne &&
+                                  d_cells.detid[idxTwo] > d_cells.detid[idxOne]);
+              // in the rare case where rho is the same, use detid
+              if (d_cells.rho[idxTwo] == rhoOne) {
+                foundHigher = d_cells.detid[idxTwo] > d_cells.detid[idxOne];
+              }
+              if(foundHigher && dist <= idxOne_delta) {
+                // update idxOne_delta
+                idxOne_delta = dist;
+                // update idxOne_nearestHigher
+                idxOne_nearestHigher = idxTwo;
+              }
+            }
           }
-          if(foundHigher && distance <= idxOne_delta) {
-            // update i_delta
-            idxOne_delta = distance;
-            // update i_nearestHigher
-            idxOne_nearestHigher = idxTwo;
+        }
+      } // finish looping over search box
+
+      bool foundNearestHigherInSearchBox = (idxOne_nearestHigher != -1);
+      // if i is not a seed or noise
+      if (foundNearestHigherInSearchBox){
+        // pass idxOne_delta and idxOne_nearestHigher to ith hit
+        d_cells.delta[idxOne] = idxOne_delta;
+        d_cells.nearestHigher[idxOne] = idxOne_nearestHigher;
+      } else {
+        // otherwise delta is garanteed to be larger outlierDeltaFactor_*delta_c
+        // we can safely maximize delta to be maxDelta
+        d_cells.delta[idxOne] = maxDelta;
+        d_cells.nearestHigher[idxOne] = -1;
+      }
+    } else { // if is scintillator
+      // similar to silicon, but with eta, phi
+      auto range = outlierDeltaFactor_ * delta_r;
+      float etaOne = d_cells.eta[idxOne];
+      float phiOne = d_cells.phi[idxOne];
+      int4 search_box = d_hist[layer].searchBoxEtaPhi(etaOne - range, etaOne + range, 
+                                                      phiOne - range, phiOne + range);
+      // loop over all bins in the search box
+      for (int xBin = search_box.x; xBin < search_box.y + 1; ++xBin) {
+        for (int yBin = search_box.z; yBin < search_box.w + 1; ++yBin) {
+          // get the id of this bin
+          size_t binIndex = d_hist[layer].getGlobalBinByBinEtaPhi(xBin, yBin);
+          // get the size of this bin
+          size_t binSize = d_hist[layer][binIndex].size();
+
+          // loop over all hits in this bin
+          for (unsigned int j = 0; j < binSize; j++) {
+            unsigned int idxTwo = d_hist[layer][binIndex][j];            
+            if (!d_cells.isSi[idxTwo]) {  //scintillator cells cannot talk to silicon cells
+              float dist = distanceEtaPhi(etaOne, phiOne, d_cells.eta[idxTwo], d_cells.phi[idxTwo]);
+              bool foundHigher = (d_cells.rho[idxTwo] > rhoOne) ||
+                                 (d_cells.rho[idxTwo] == rhoOne &&
+                                  d_cells.detid[idxTwo] > d_cells.detid[idxOne]);
+              // if dist == idxOne_delta, then last comer being the nearest higher
+              if (foundHigher && dist <= idxOne_delta) {
+                // update idxOne_delta
+                idxOne_delta = dist;
+                // update idxOne_nearestHigher
+                idxOne_nearestHigher = idxTwo;
+              }
+            }
           }
         }
       }
-    } // finish looping over search box
 
-    bool foundNearestHigherInSearchBox = (idxOne_nearestHigher != -1);
-    // if i is not a seed or noise
-    if (foundNearestHigherInSearchBox){
-      // pass i_delta and i_nearestHigher to ith hit
-      d_cells.delta[idxOne] = idxOne_delta;
-      d_cells.nearestHigher[idxOne] = idxOne_nearestHigher;
-    } else {
-      // otherwise delta is garanteed to be larger outlierDeltaFactor_*delta_c
-      // we can safely maximize delta to be maxDelta
-      d_cells.delta[idxOne] = std::numeric_limits<float>::max();
-      d_cells.nearestHigher[idxOne] = -1;
-    }
-  }
+      bool foundNearestHigherInSearchBox = (idxOne_delta != maxDelta);
+      if (foundNearestHigherInSearchBox) {
+        d_cells.delta[idxOne] = idxOne_delta;
+        d_cells.nearestHigher[idxOne] = idxOne_nearestHigher;
+      } else {
+        // otherwise delta is guaranteed to be larger outlierDeltaFactor_*delta_c
+        // we can safely maximize delta to be maxDelta
+        d_cells.delta[idxOne] = maxDelta;
+        d_cells.nearestHigher[idxOne] = -1;
+      }
+    } // if isSi
+  } // if idx < numOfCells
 } //kernel
 
 
@@ -371,7 +413,7 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   const dim3 gridSize(ceil(numberOfCells/1024.0),1,1);
   kernel_compute_histogram <<<gridSize,blockSize>>>(d_hist, d_cells, numberOfCells);
   kernel_compute_density <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, delta_r, scintMaxIphi_, use2x2_,numberOfCells);
-  kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, outlierDeltaFactor_, numberOfCells);
+  kernel_compute_distanceToHigher <<<gridSize,blockSize>>>(d_hist, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, delta_r, outlierDeltaFactor_, numberOfCells);
   kernel_find_clusters <<<gridSize,blockSize>>>(d_seeds, d_followers, d_cells, delta_c_EE, delta_c_FH, delta_c_BH, kappa_, outlierDeltaFactor_, numberOfCells);  
   
   const dim3 blockSize_nlayers(numberOfLayers,1,1);
