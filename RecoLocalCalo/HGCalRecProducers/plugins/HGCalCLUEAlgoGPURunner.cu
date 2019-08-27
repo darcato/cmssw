@@ -65,11 +65,11 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
       for(int xBin = search_box.x; xBin < search_box.y+1; ++xBin) {
         for(int yBin = search_box.z; yBin < search_box.w+1; ++yBin) {
           int binIndex = d_hist[layer].getGlobalBinByBin(xBin,yBin);
-          int binSize  = d_hist[layer][binIndex].size();
+          size_t binSize  = d_hist[layer][binIndex].size();
 
           // loop over bin contents
-          for (int j = 0; j < binSize; j++) {
-            int idxTwo = d_hist[layer][binIndex][j];
+          for (unsigned int j = 0; j < binSize; j++) {
+            unsigned int idxTwo = d_hist[layer][binIndex][j];
             if (d_cells.isSi[idxTwo]) {  //silicon cells cannot talk to scintillator cells
               float dist = distance(xOne, yOne, d_cells.x[idxTwo], d_cells.y[idxTwo]);
               if(dist < delta_c) { 
@@ -79,7 +79,6 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
           }
         }
       }
-      d_cells.rho[idxOne] = rho;
     } else {
       float etaOne = d_cells.eta[idxOne];
       float phiOne = d_cells.phi[idxOne];
@@ -87,6 +86,7 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
       // search box with histogram
       int4 search_box = d_hist[layer].searchBoxEtaPhi(etaOne - delta_r, etaOne + delta_r, phiOne - delta_r, phiOne + delta_r);
 
+      rho += d_cells.weight[idxOne];
       float northeast(0), northwest(0), southeast(0), southwest(0), all(0);
 
       for (int etaBin = search_box.x; etaBin < search_box.y + 1; ++etaBin) {
@@ -131,10 +131,11 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
                                ? std::max(northeast, northwest)
                                : std::max(southeast, southwest);
       if (use2x2_)
-        d_cells.rho[idxOne] += neighborsval;
+        rho += neighborsval;
       else
-        d_cells.rho[idxOne] += all;
+        rho += all;
     }
+    d_cells.rho[idxOne] = rho;
   } // if idx<num_of_cells
 } //kernel
 
@@ -375,8 +376,11 @@ void ClueGPURunner::clueGPU(std::vector<CellsOnLayer> & cells_,
   CellsOnLayer localSoA;
   for (int i=0; i < numberOfLayers; i++){
     localSoA.detid.insert( localSoA.detid.end(), cells_[i].detid.begin(), cells_[i].detid.end() ); 
+    localSoA.isSi.insert( localSoA.isSi.end(), cells_[i].isSi.begin(), cells_[i].isSi.end() );
     localSoA.x.insert( localSoA.x.end(), cells_[i].x.begin(), cells_[i].x.end() );
     localSoA.y.insert( localSoA.y.end(), cells_[i].y.begin(), cells_[i].y.end() );
+    localSoA.eta.insert( localSoA.eta.end(), cells_[i].eta.begin(), cells_[i].eta.end() );
+    localSoA.phi.insert( localSoA.phi.end(), cells_[i].phi.begin(), cells_[i].phi.end() );
     localSoA.layer.insert( localSoA.layer.end(), cells_[i].layer.begin(), cells_[i].layer.end() );
     localSoA.weight.insert( localSoA.weight.end(), cells_[i].weight.begin(), cells_[i].weight.end() );
     localSoA.sigmaNoise.insert( localSoA.sigmaNoise.end(), cells_[i].sigmaNoise.begin(), cells_[i].sigmaNoise.end() );

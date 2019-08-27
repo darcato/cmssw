@@ -12,10 +12,10 @@
 #include <cuda.h>
 
 
-// This has to be the same as cpu version
-static const unsigned int maxlayer = 52;
+// This has to be the same as cpu version - so why are these magic numbers???
+static const unsigned int maxlayer = 50;
 static const unsigned int lastLayerEE = 28;
-static const unsigned int lastLayerFH = 40;
+static const unsigned int lastLayerFH = 36;
 
 static const int maxNSeeds = 4096; 
 static const int maxNFollowers = 20; 
