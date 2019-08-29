@@ -71,7 +71,7 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
           for (unsigned int j = 0; j < binSize; j++) {
             unsigned int idxTwo = d_hist[layer][binIndex][j];
             if (d_cells.isSi[idxTwo]) {  //silicon cells cannot talk to scintillator cells
-              float dist = distance(xOne, yOne, d_cells.x[idxTwo], d_cells.y[idxTwo]);
+              const float dist = distance(xOne, yOne, d_cells.x[idxTwo], d_cells.y[idxTwo]);
               if(dist < delta_c) { 
                 rho += (idxOne == idxTwo ? 1. : 0.5) * d_cells.weight[idxTwo];              
               }
@@ -111,7 +111,7 @@ __global__ void kernel_compute_density( HGCalLayerTilesGPU *d_hist,
                 int dIEta = iEtaTwo - iEtaOne;
 
                 if (idxTwo != idxOne) {
-                  auto neighborCellContribution = 0.5f * d_cells.weight[idxTwo];
+                  float neighborCellContribution = 0.5f * d_cells.weight[idxTwo];
                   all += neighborCellContribution;
                   if (dIPhi >= 0 && dIEta >= 0)
                     northeast += neighborCellContribution;
@@ -150,7 +150,7 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
   int idxOne = blockIdx.x * blockDim.x + threadIdx.x;
 
   if (idxOne < numberOfCells){
-    auto maxDelta = std::numeric_limits<float>::max();
+    float maxDelta = std::numeric_limits<float>::max();
     float idxOne_delta = maxDelta;
     int idxOne_nearestHigher = -1;
     float rhoOne = d_cells.rho[idxOne];
@@ -163,27 +163,26 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
       float yOne = d_cells.y[idxOne];
       
       // search box with histogram
-      int4 search_box = d_hist[layer].searchBox(xOne - delta_c, xOne + delta_c, yOne - delta_c, yOne + delta_c);
+      // guarantee to cover a range "outlierDeltaFactor_*delta_c"
+      float range = outlierDeltaFactor_ * delta_c;
+      int4 search_box = d_hist[layer].searchBox(xOne - range, xOne + range, yOne - range, yOne + range);
 
       // loop over bins in search box
       for(int xBin = search_box.x; xBin < search_box.y+1; ++xBin) {
         for(int yBin = search_box.z; yBin < search_box.w+1; ++yBin) {
-          int binIndex = d_hist[layer].getGlobalBinByBin(xBin,yBin);
-          int binSize  = d_hist[layer][binIndex].size();
+          size_t binIndex = d_hist[layer].getGlobalBinByBin(xBin,yBin);
+          size_t binSize  = d_hist[layer][binIndex].size();
 
           // loop over bin contents
-          for (int j = 0; j < binSize; j++) {
-            int idxTwo = d_hist[layer][binIndex][j];
+          for (unsigned int j = 0; j < binSize; j++) {
+            unsigned int idxTwo = d_hist[layer][binIndex][j];
             if (d_cells.isSi[idxTwo]){
-              float dist = distance(xOne, yOne, d_cells.x[idxTwo], d_cells.y[idxTwo]);
-              bool foundHigher = (d_cells.rho[idxTwo] > rhoOne)||
-                                 (d_cells.rho[idxTwo] == rhoOne &&
-                                  d_cells.detid[idxTwo] > d_cells.detid[idxOne]);
-              // in the rare case where rho is the same, use detid
-              if (d_cells.rho[idxTwo] == rhoOne) {
-                foundHigher = d_cells.detid[idxTwo] > d_cells.detid[idxOne];
-              }
-              if(foundHigher && dist <= idxOne_delta) {
+              const float dist = distance(xOne, yOne, d_cells.x[idxTwo], d_cells.y[idxTwo]);
+              const float rhoTwo = d_cells.rho[idxTwo]; 
+              const bool foundHigher = (rhoTwo > rhoOne) ||
+                                 ((rhoTwo == rhoOne) && (d_cells.detid[idxTwo] > d_cells.detid[idxOne]));
+              
+              if(foundHigher && ((dist < idxOne_delta) || ((dist == idxOne_delta) && (d_cells.detid[idxTwo] > d_cells.detid[idxOne_nearestHigher])))) {
                 // update idxOne_delta
                 idxOne_delta = dist;
                 // update idxOne_nearestHigher
@@ -193,8 +192,7 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
           }
         }
       } // finish looping over search box
-
-      bool foundNearestHigherInSearchBox = (idxOne_nearestHigher != -1);
+      bool foundNearestHigherInSearchBox = (idxOne_delta != maxDelta);
       // if i is not a seed or noise
       if (foundNearestHigherInSearchBox){
         // pass idxOne_delta and idxOne_nearestHigher to ith hit
@@ -208,29 +206,29 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
       }
     } else { // if is scintillator
       // similar to silicon, but with eta, phi
-      auto range = outlierDeltaFactor_ * delta_r;
-      float etaOne = d_cells.eta[idxOne];
-      float phiOne = d_cells.phi[idxOne];
+      const float range = outlierDeltaFactor_ * delta_r;
+      const float etaOne = d_cells.eta[idxOne];
+      const float phiOne = d_cells.phi[idxOne];
       int4 search_box = d_hist[layer].searchBoxEtaPhi(etaOne - range, etaOne + range, 
                                                       phiOne - range, phiOne + range);
       // loop over all bins in the search box
       for (int xBin = search_box.x; xBin < search_box.y + 1; ++xBin) {
         for (int yBin = search_box.z; yBin < search_box.w + 1; ++yBin) {
           // get the id of this bin
-          size_t binIndex = d_hist[layer].getGlobalBinByBinEtaPhi(xBin, yBin);
+          const size_t binIndex = d_hist[layer].getGlobalBinByBinEtaPhi(xBin, yBin);
           // get the size of this bin
-          size_t binSize = d_hist[layer][binIndex].size();
+          const size_t binSize = d_hist[layer][binIndex].size();
 
           // loop over all hits in this bin
           for (unsigned int j = 0; j < binSize; j++) {
             unsigned int idxTwo = d_hist[layer][binIndex][j];            
             if (!d_cells.isSi[idxTwo]) {  //scintillator cells cannot talk to silicon cells
-              float dist = distanceEtaPhi(etaOne, phiOne, d_cells.eta[idxTwo], d_cells.phi[idxTwo]);
-              bool foundHigher = (d_cells.rho[idxTwo] > rhoOne) ||
-                                 (d_cells.rho[idxTwo] == rhoOne &&
-                                  d_cells.detid[idxTwo] > d_cells.detid[idxOne]);
+              const float dist = distanceEtaPhi(etaOne, phiOne, d_cells.eta[idxTwo], d_cells.phi[idxTwo]);
+              const float rhoTwo = d_cells.rho[idxTwo]; 
+              const bool foundHigher = (rhoTwo > rhoOne) ||
+                                 ((rhoTwo == rhoOne) && (d_cells.detid[idxTwo] > d_cells.detid[idxOne]));
               // if dist == idxOne_delta, then last comer being the nearest higher
-              if (foundHigher && dist <= idxOne_delta) {
+              if (foundHigher && ((dist < idxOne_delta) || ((dist == idxOne_delta) && (d_cells.detid[idxTwo] > d_cells.detid[idxOne_nearestHigher])))) {
                 // update idxOne_delta
                 idxOne_delta = dist;
                 // update idxOne_nearestHigher
