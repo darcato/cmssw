@@ -69,6 +69,8 @@ public:
 
     for (auto& cells : cells_)
       cells.clear();
+    for (auto& cells : gpuCells_)
+      cells.clear();
   }
 
   Density getDensity() override;
@@ -180,6 +182,7 @@ private:
   // };
 
   std::vector<CellsOnLayer> cells_;
+  std::vector<CellsOnLayer> gpuCells_;
 
   std::vector<int> numberOfClustersPerLayer_;
 

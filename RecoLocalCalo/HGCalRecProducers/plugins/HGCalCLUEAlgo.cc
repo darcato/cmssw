@@ -13,12 +13,16 @@
 #include "tbb/tbb.h"
 #include <limits>
 
+#include <chrono> 
+
 using namespace hgcal_clustering;
 
 void HGCalCLUEAlgo::getEventSetupPerAlgorithm(const edm::EventSetup& es) {
   cells_.clear();
+  gpuCells_.clear();
   numberOfClustersPerLayer_.clear();
   cells_.resize(2 * (maxlayer_ + 1));
+  gpuCells_.resize(2 * (maxlayer_ + 1));
   numberOfClustersPerLayer_.resize(2 * (maxlayer_ + 1), 0);
 }
 
@@ -67,6 +71,19 @@ void HGCalCLUEAlgo::populate(const HGCRecHitCollection& hits) {
     }  // else, isSilicon == true and eta phi values will not be used
     cells_[layer].weight.emplace_back(hgrh.energy());
     cells_[layer].sigmaNoise.emplace_back(sigmaNoise);
+
+    gpuCells_[layer].detid.emplace_back(detid);
+    gpuCells_[layer].x.emplace_back(position.x());
+    gpuCells_[layer].y.emplace_back(position.y());
+    gpuCells_[layer].layer.emplace_back(layer);
+    //if (!rhtools_.isOnlySilicon(layer)) { //for the moment copy everything
+      // can be optimized by not copying the unused variables when is only silicon
+      gpuCells_[layer].isSi.emplace_back(rhtools_.isSilicon(detid));
+      gpuCells_[layer].eta.emplace_back(position.eta());
+      gpuCells_[layer].phi.emplace_back(position.phi());
+    //}
+    gpuCells_[layer].weight.emplace_back(hgrh.energy());
+    gpuCells_[layer].sigmaNoise.emplace_back(sigmaNoise);
   }
 }
 
@@ -83,6 +100,18 @@ void HGCalCLUEAlgo::prepareDataStructures(unsigned int l) {
     cells_[l].eta.resize(cellsSize, 0.f);
     cells_[l].phi.resize(cellsSize, 0.f);
   }
+
+  gpuCells_[l].rho.resize(cellsSize, 0.f);
+  gpuCells_[l].delta.resize(cellsSize, 9999999);
+  gpuCells_[l].nearestHigher.resize(cellsSize, -1);
+  gpuCells_[l].clusterIndex.resize(cellsSize, -1);
+  gpuCells_[l].followers.resize(cellsSize);
+  gpuCells_[l].isSeed.resize(cellsSize, 0);
+  //if (rhtools_.isOnlySilicon(l)) {
+    gpuCells_[l].isSi.resize(cellsSize, true);
+    gpuCells_[l].eta.resize(cellsSize, 0.f);
+    gpuCells_[l].phi.resize(cellsSize, 0.f);
+  //}
 }
 
 // Create a vector of Hexels associated to one cluster from a collection of
@@ -90,11 +119,58 @@ void HGCalCLUEAlgo::prepareDataStructures(unsigned int l) {
 // this method can be invoked multiple times for the same event with different
 // input (reset should be called between events)
 void HGCalCLUEAlgo::makeClusters() {
-  gpuRunner.clueGPU(cells_, numberOfClustersPerLayer_, vecDeltas_, kappa_, outlierDeltaFactor_, scintMaxIphi_, use2x2_);
+  std::cout << "Inputs ... " << std::endl;
+  for (unsigned int l=0; l<2*maxlayer_+2; l++) {
+    
+    prepareDataStructures(l); //IMPORTANT
+    
+    auto& layerCPU = cells_[l];
+    auto& layerGPU = gpuCells_[l];
+    unsigned int numberOfCells = layerCPU.detid.size();
+    for (unsigned int c=0; c<numberOfCells; c++) {
+      if (layerCPU.detid[c] != layerGPU.detid[c]) {
+        printf("[l:%d][c:%d] - detid %d vs %d \n", l, c, layerCPU.detid[c](), layerGPU.detid[c]());
+      }
+      if (layerCPU.isSi[c] != layerGPU.isSi[c]) {
+        printf("[l:%d][c:%d] - isSi %d vs %d \n", l, c, layerCPU.isSi[c], layerGPU.isSi[c]);
+      }
+      if (layerCPU.layer[c] != layerGPU.layer[c]) {
+        printf("[l:%d][c:%d] - layer %d vs %d \n", l, c, layerCPU.layer[c], layerGPU.layer[c]);
+      }
+      if (abs(layerCPU.x[c] - layerGPU.x[c])>1e-5) {
+        printf("[l:%d][c:%d] - x %f vs %f \n", l, c, layerCPU.x[c], layerGPU.x[c]);
+      }
+      if (abs(layerCPU.y[c] - layerGPU.y[c])>1e-5) {
+        printf("[l:%d][c:%d] - y %f vs %f \n", l, c, layerCPU.y[c], layerGPU.y[c]);
+      }
+      if (!layerCPU.isSi[c] && abs(layerCPU.eta[c] - layerGPU.eta[c])>1e-5) {
+        printf("[l:%d][c:%d] - eta %f vs %f \n", l, c, layerCPU.eta[c], layerGPU.eta[c]);
+      }
+      if (!layerCPU.isSi[c] && abs(layerCPU.phi[c] - layerGPU.phi[c])>1e-5) {
+        printf("[l:%d][c:%d] - phi %f vs %f \n", l, c, layerCPU.phi[c], layerGPU.phi[c]);
+      }
+      if (abs(layerCPU.weight[c] - layerGPU.weight[c])>1e-5) {
+        printf("[l:%d][c:%d] - weight %f vs %f \n", l, c, layerCPU.weight[c], layerGPU.weight[c]);
+      }
+      if (abs(layerCPU.sigmaNoise[c] - layerGPU.sigmaNoise[c])>1e-5) {
+        printf("[l:%d][c:%d] - sigmaNoise %f vs %f \n", l, c, layerCPU.sigmaNoise[c], layerGPU.sigmaNoise[c]);
+      }
+    }
+  }
+
+  std::cout << "GPU execution ... " << std::endl;
+  auto start = std::chrono::high_resolution_clock::now(); 
+  gpuRunner.clueGPU(gpuCells_, numberOfClustersPerLayer_, vecDeltas_, kappa_, outlierDeltaFactor_, scintMaxIphi_, use2x2_);
+  auto stop = std::chrono::high_resolution_clock::now();
+  auto duration = std::chrono::duration_cast<std::chrono::microseconds>(stop - start); 
+  std::cout << duration.count() << std::endl;
+
+  std::cout << "CPU execution ... " << std::endl;
+  printf("maxl: %d delta thrs: last_ee=%d firtsBHm1=%d\n", maxlayer_, lastLayerEE_, (firstLayerBH_ - 1) );
   // assign all hits in each layer to a cluster core
   tbb::this_task_arena::isolate([&] {
     tbb::parallel_for(size_t(0), size_t(2 * maxlayer_ + 2), [&](size_t i) {
-      prepareDataStructures(i);
+      //prepareDataStructures(i);
       HGCalLayerTiles lt;
       lt.clear();
       lt.fill(cells_[i].x, cells_[i].y, cells_[i].eta, cells_[i].phi, cells_[i].isSi);
@@ -115,6 +191,32 @@ void HGCalCLUEAlgo::makeClusters() {
       numberOfClustersPerLayer_[i] = findAndAssignClusters(i, delta_c, delta_r);
     });
   });
+
+  std::cout << "Verifying results ... " << std::endl;
+  auto rhoErr = 0, rhoOk = 0, nearestHigherErr = 0, nearestHigherOk = 0;
+  int ncell_integral = 0;
+  for (unsigned int l=0; l<2*maxlayer_+2; l++) {
+    auto layerCPU = cells_[l];
+    auto layerGPU = gpuCells_[l];
+    unsigned int numberOfCells = layerCPU.clusterIndex.size();
+    for (unsigned int c=0; c<numberOfCells; c++) {
+      if (abs(layerCPU.rho[c] - layerGPU.rho[c])>1e-5) {
+        rhoErr++;
+        printf("[l:%d][c:%d] - {%u %d} rho %f vs %f\n", l, c, layerCPU.detid[c](), layerGPU.isSi[c], layerCPU.rho[c], layerGPU.rho[c]);
+      } else rhoOk++;
+      // The nearest higher found on GPU is a unique index for all the layers
+      // I need to remove the sum of all the cell in preceding layers to have the index in this layer
+      if ((layerCPU.nearestHigher[c] == -1 && layerGPU.nearestHigher[c] != -1) || 
+          (layerCPU.nearestHigher[c] != -1 && layerGPU.nearestHigher[c] == -1) || 
+          (layerCPU.nearestHigher[c] != -1 && (layerCPU.nearestHigher[c] != (layerGPU.nearestHigher[c]-ncell_integral)))) {
+        nearestHigherErr++;
+        printf("[l:%d][c:%d] - {%d} nearestHigher %d vs %d\n", l, c, layerGPU.isSi[c], layerCPU.nearestHigher[c], layerGPU.nearestHigher[c]==-1 ? -1 : (layerGPU.nearestHigher[c]-ncell_integral));
+      } else nearestHigherOk++;
+    }
+    ncell_integral += layerCPU.weight.size();
+  }
+  std::cout << "rhoErr: " << rhoErr << " rhoOk: " << rhoOk << std::endl;
+  std::cout << "nearestHigherErr: " << nearestHigherErr << " nearestHigherOk: " << nearestHigherOk << std::endl;
 
   // Now that we have the density per point we can store it
   for (unsigned int i = 0; i < 2 * maxlayer_ + 2; ++i) {
@@ -370,11 +472,11 @@ void HGCalCLUEAlgo::calculateDistanceToHigher(const HGCalLayerTiles& lt,
             bool otherSi = isOnlySi || cellsOnLayer.isSi[otherId];
             if (otherSi) {  //silicon cells cannot talk to scintillator cells
               float dist = distance(i, otherId, layerId, false);
-              bool foundHigher = (cellsOnLayer.rho[otherId] > cellsOnLayer.rho[i]) ||
-                                 (cellsOnLayer.rho[otherId] == cellsOnLayer.rho[i] &&
-                                  cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i]);
+              bool foundHigher = ((cellsOnLayer.rho[otherId] > cellsOnLayer.rho[i]) ||
+                                 ((cellsOnLayer.rho[otherId] == cellsOnLayer.rho[i]) &&
+                                  (cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i])));
               // if dist == i_delta, then last comer being the nearest higher
-              if (foundHigher && dist <= i_delta) {
+              if (foundHigher && (dist < i_delta || (dist == i_delta && cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i_nearestHigher]))) {
                 // update i_delta
                 i_delta = dist;
                 // update i_nearestHigher
@@ -416,11 +518,11 @@ void HGCalCLUEAlgo::calculateDistanceToHigher(const HGCalLayerTiles& lt,
             unsigned int otherId = lt[binId][j];
             if (!cellsOnLayer.isSi[otherId]) {  //scintillator cells cannot talk to silicon cells
               float dist = distance(i, otherId, layerId, true);
-              bool foundHigher = (cellsOnLayer.rho[otherId] > cellsOnLayer.rho[i]) ||
-                                 (cellsOnLayer.rho[otherId] == cellsOnLayer.rho[i] &&
-                                  cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i]);
+              bool foundHigher = ((cellsOnLayer.rho[otherId] > cellsOnLayer.rho[i]) ||
+                                 ((cellsOnLayer.rho[otherId] == cellsOnLayer.rho[i]) &&
+                                  (cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i])));
               // if dist == i_delta, then last comer being the nearest higher
-              if (foundHigher && dist <= i_delta) {
+              if (foundHigher && ((dist < i_delta) || ((dist == i_delta) && (cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i_nearestHigher])))) {
                 // update i_delta
                 i_delta = dist;
                 // update i_nearestHigher
@@ -442,8 +544,8 @@ void HGCalCLUEAlgo::calculateDistanceToHigher(const HGCalLayerTiles& lt,
         cellsOnLayer.nearestHigher[i] = -1;
       }
     }
-    LogDebug("HGCalCLUEAlgo") << "Debugging calculateDistanceToHigher: \n"
-                              << "  cell: " << i << " isSilicon: " << cellsOnLayer.isSi[i]
+    //LogDebug("HGCalCLUEAlgo") << "Debugging calculateDistanceToHigher: \n"
+    std::cout << "CPU layer: " << layerId << "  cell: " << i << " isSilicon: " << cellsOnLayer.isSi[i]
                               << " eta: " << cellsOnLayer.eta[i] << " phi: " << cellsOnLayer.phi[i]
                               << " energy: " << cellsOnLayer.weight[i] << " density: " << cellsOnLayer.rho[i]
                               << " nearest higher: " << cellsOnLayer.nearestHigher[i]
