@@ -179,10 +179,14 @@ __global__ void kernel_compute_distanceToHigher(HGCalLayerTilesGPU* d_hist,
             if (d_cells.isSi[idxTwo]){
               const float dist = distance(xOne, yOne, d_cells.x[idxTwo], d_cells.y[idxTwo]);
               const float rhoTwo = d_cells.rho[idxTwo]; 
-              const bool foundHigher = (rhoTwo > rhoOne) ||
-                                 ((rhoTwo == rhoOne) && (d_cells.detid[idxTwo] > d_cells.detid[idxOne]));
+
+              // In GPU rhoTwo==rhoOne somethimes is not true when it should be (due to approximations)
+              // So we use a epsilon: 1e-7 But the threshold is not sufficiently small
+              // Using 1e-8 is too small
+              const bool foundHigher = (rhoTwo > rhoOne) || (abs(rhoTwo-rhoOne)<1e-7 && (d_cells.detid[idxTwo] > d_cells.detid[idxOne]));
+              const bool distLower = (dist < idxOne_delta) || ((dist == idxOne_delta) && (rhoTwo > d_cells.rho[idxOne_nearestHigher]));
               
-              if(foundHigher && ((dist < idxOne_delta) || ((dist == idxOne_delta) && (d_cells.detid[idxTwo] > d_cells.detid[idxOne_nearestHigher])))) {
+              if(foundHigher && distLower) {
                 // update idxOne_delta
                 idxOne_delta = dist;
                 // update idxOne_nearestHigher

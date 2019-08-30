@@ -451,6 +451,7 @@ void HGCalCLUEAlgo::calculateDistanceToHigher(const HGCalLayerTiles& lt,
     float maxDelta = std::numeric_limits<float>::max();
     float i_delta = maxDelta;
     int i_nearestHigher = -1;
+    float rhoOne = cellsOnLayer.rho[i];
     if (isSi) {
       float delta = delta_c;
       // get search box for ith hit
@@ -471,12 +472,12 @@ void HGCalCLUEAlgo::calculateDistanceToHigher(const HGCalLayerTiles& lt,
             unsigned int otherId = lt[binId][j];
             bool otherSi = isOnlySi || cellsOnLayer.isSi[otherId];
             if (otherSi) {  //silicon cells cannot talk to scintillator cells
-              float dist = distance(i, otherId, layerId, false);
-              bool foundHigher = ((cellsOnLayer.rho[otherId] > cellsOnLayer.rho[i]) ||
-                                 ((cellsOnLayer.rho[otherId] == cellsOnLayer.rho[i]) &&
-                                  (cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i])));
+              const float dist = distance(i, otherId, layerId, false);
+              const float rhoTwo = cellsOnLayer.rho[otherId]; 
+              const bool foundHigher = (rhoTwo > rhoOne) || ((rhoTwo == rhoOne) && (cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i]));
+              const bool distLower = (dist < i_delta) || ((dist == i_delta) && (rhoTwo > cellsOnLayer.rho[i_nearestHigher]));              
               // if dist == i_delta, then last comer being the nearest higher
-              if (foundHigher && (dist < i_delta || (dist == i_delta && cellsOnLayer.detid[otherId] > cellsOnLayer.detid[i_nearestHigher]))) {
+              if (foundHigher && distLower) {
                 // update i_delta
                 i_delta = dist;
                 // update i_nearestHigher
@@ -544,12 +545,12 @@ void HGCalCLUEAlgo::calculateDistanceToHigher(const HGCalLayerTiles& lt,
         cellsOnLayer.nearestHigher[i] = -1;
       }
     }
-    //LogDebug("HGCalCLUEAlgo") << "Debugging calculateDistanceToHigher: \n"
+    /* //LogDebug("HGCalCLUEAlgo") << "Debugging calculateDistanceToHigher: \n"
     std::cout << "CPU layer: " << layerId << "  cell: " << i << " isSilicon: " << cellsOnLayer.isSi[i]
                               << " eta: " << cellsOnLayer.eta[i] << " phi: " << cellsOnLayer.phi[i]
                               << " energy: " << cellsOnLayer.weight[i] << " density: " << cellsOnLayer.rho[i]
                               << " nearest higher: " << cellsOnLayer.nearestHigher[i]
-                              << " distance: " << cellsOnLayer.delta[i] << "\n";
+                              << " distance: " << cellsOnLayer.delta[i] << "\n"; */
   }
 }
 
